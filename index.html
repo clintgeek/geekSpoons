@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#080D13">
+    <meta name="application-name" content="Hammerspoon Workstation Controller">
+    <meta name="apple-mobile-web-app-title" content="Hammerspoon">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link rel="apple-touch-icon" href="/icon.svg">
+    <title>Hammerspoon Workstation Controller</title>
+    <style>
+        :root {
+            --bg-primary: #080D13;
+            --bg-darkest: #070B10;
+            --panel-bg: #101722;
+            --panel-secondary: #151C28;
+            --elevated: #19212E;
+            --inset: #080D12;
+            --border: #293544;
+            --border-highlight: #344253;
+            --text-primary: #D8DEE7;
+            --text-secondary: #8492A6;
+            --text-muted: #5C6B7E;
+            --amber: #D6A73A;
+            --amber-bright: #E5B84B;
+            --green: #18D866;
+            --green-dark: #063A25;
+            --spotify-green: #1ED760;
+            --red: #E5484D;
+
+            --title-bar-h: 28px;
+            --menu-h: 30px;
+            --toolbar-h: 40px;
+            --radius-panel: 8px;
+            --radius-control: 4px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text', sans-serif;
+            font-size: 13px;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mono {
+            font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+            letter-spacing: 0.02em;
+        }
+
+        /* --- TITLE BAR --- */
+        .title-bar {
+            height: var(--title-bar-h);
+            min-height: var(--title-bar-h);
+            background: linear-gradient(to bottom, #0B1117, #070B10);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            -webkit-app-region: drag;
+        }
+
+        .title-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .app-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: var(--amber);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-size: 9px;
+            font-weight: 800;
+        }
+
+        .app-title {
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--amber);
+            letter-spacing: 0.08em;
+        }
+
+        .app-title span {
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        .title-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .host-info {
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 10px;
+            color: var(--text-secondary);
+            letter-spacing: 0.05em;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 6px;
+        }
+
+        .win-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .win-btn.min { background: #5C6B7E; }
+        .win-btn.max { background: #6A7B8E; }
+        .win-btn.close { background: #9B4D4D; }
+
+        /* --- MENU BAR --- */
+        .menu-bar {
+            height: var(--menu-h);
+            min-height: var(--menu-h);
+            background: var(--bg-darkest);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 6px;
+        }
+
+        .menu-item {
+            padding: 0 10px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.08em;
+            cursor: default;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            border-radius: 2px;
+        }
+
+        .menu-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: var(--amber);
+        }
+
+        /* --- TOOLBAR --- */
+        .quick-toolbar {
+            height: var(--toolbar-h);
+            min-height: var(--toolbar-h);
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 8px;
+        }
+
+        .tb-btn {
+            height: 30px;
+            padding: 0 12px;
+            background: linear-gradient(to bottom, #1C2736, #19212E);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.3);
+            transition: all 0.1s ease;
+        }
+
+        .tb-btn:hover {
+            background: linear-gradient(to bottom, #212B3A, #1C2433);
+            border-color: var(--border-highlight);
+        }
+
+        .tb-btn:active {
+            background: #101722;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+            transform: translateY(1px);
+        }
+
+        .tb-btn.active {
+            color: var(--green);
+            border-color: var(--green);
+            background: linear-gradient(to bottom, #0D2A1B, #0A2016);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 0 8px rgba(24,216,102,0.15);
+        }
+
+        .tb-icon {
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tb-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        /* --- MAIN WORKSPACE --- */
+        .workspace {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 42% 58%;
+            gap: 12px;
+            padding: 12px;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .col {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .col-right {
+            gap: 12px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-panel);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.2);
+            min-height: 0;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .panel-icon {
+            width: 14px;
+            height: 14px;
+            color: var(--amber);
+        }
+
+        .panel-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        .chevron {
+            width: 14px;
+            height: 14px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .chevron:hover { color: var(--amber); }
+
+        /* --- MEETING CONTROLS --- */
+        .meeting-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            flex: 1;
+        }
+
+        .meeting-control {
+            background: linear-gradient(to bottom, #1A2330, #151C28);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            padding: 10px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.12s ease;
+        }
+
+        .meeting-control:hover {
+            border-color: var(--border-highlight);
+            background: linear-gradient(to bottom, #202B3A, #19212E);
+        }
+
+        .meeting-control:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+            background: #0F161F;
+        }
+
+        .meeting-control.live {
+            background: linear-gradient(to bottom, #0D2E1E, #063A25);
+            border-color: var(--green);
+            color: var(--green);
+        }
+
+        .meeting-control.live .meeting-icon { color: var(--green); }
+        .meeting-control.live .meeting-label { color: var(--green); }
+
+        .meeting-icon {
+            width: 32px;
+            height: 32px;
+            color: var(--text-secondary);
+        }
+
+        .meeting-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        .meeting-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.08em;
+            text-align: center;
+        }
+
+        /* --- AUDIO PANEL --- */
+        .audio-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .audio-field {
+            background: linear-gradient(to bottom, #1A2330, #151C28);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 10px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.12s ease;
+            min-height: 0;
+        }
+
+        .audio-field:hover {
+            border-color: var(--border-highlight);
+            background: linear-gradient(to bottom, #202B3A, #19212E);
+        }
+
+        .audio-field:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+            background: #0F161F;
+        }
+
+        .audio-field.muted {
+            color: var(--red);
+            border-color: var(--red);
+            background: linear-gradient(to bottom, #3A1A1E, #241015);
+        }
+
+        .audio-field.muted .audio-icon { color: var(--red); }
+        .audio-field.muted .audio-label { color: var(--red); }
+
+        .audio-icon {
+            width: 28px;
+            height: 28px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .audio-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        .audio-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-align: center;
+            word-break: break-word;
+            max-width: 100%;
+            line-height: 1.2;
+        }
+
+        .audio-value {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* --- SCREEN CAPTURE --- */
+        .capture-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .capture-control {
+            background: linear-gradient(to bottom, #1A2330, #151C28);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 14px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.12s ease;
+        }
+
+        .capture-control:hover {
+            border-color: var(--border-highlight);
+            background: linear-gradient(to bottom, #202B3A, #19212E);
+        }
+
+        .capture-control:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+            background: #0F161F;
+        }
+
+        .capture-icon {
+            width: 22px;
+            height: 22px;
+            color: var(--text-secondary);
+        }
+
+        .capture-primary {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.05em;
+        }
+
+        .capture-secondary {
+            font-size: 10px;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+        }
+
+        /* --- SPOTIFY PANEL --- */
+        .spotify-panel {
+            background: linear-gradient(180deg, #0A0F12 0%, #0C1318 100%);
+            border: 1px solid #1A2D25;
+            border-radius: var(--radius-panel);
+            padding: 12px 14px 6px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 0 0 auto;
+            min-height: 0;
+            box-shadow: inset 0 1px 0 rgba(30,215,96,0.04), 0 6px 18px rgba(0,0,0,0.35);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .spotify-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at 20% 20%, rgba(30,215,96,0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .spotify-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 1;
+        }
+
+        .spotify-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--spotify-green);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .spotify-icon {
+            width: 18px;
+            height: 18px;
+        }
+
+        .spotify-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: var(--spotify-green);
+        }
+
+        .spotify-status {
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 10px;
+            color: var(--green);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            letter-spacing: 0.05em;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+        }
+
+        .now-playing {
+            display: flex;
+            gap: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .album-art {
+            width: 180px;
+            height: 180px;
+            min-width: 180px;
+            background: #0A0E12;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .album-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .album-art img.visible { display: block; }
+
+        .album-placeholder {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #121A22 0%, #0A0F13 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            gap: 10px;
+        }
+
+        .album-placeholder svg {
+            width: 48px;
+            height: 48px;
+            fill: #2A3A48;
+        }
+
+        .track-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .now-playing-label {
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 11px;
+            color: var(--green);
+            letter-spacing: 0.12em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .track-name {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .artist-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--amber);
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .album-name {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-meta {
+            display: flex;
+            gap: 12px;
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        .tech-meta {
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+        }
+
+        /* --- VISUALIZER --- */
+        .visualizer-wrap {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 46px;
+            background: var(--inset);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+        }
+
+        #vizCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* --- PROGRESS --- */
+        .progress-wrap {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .progress-times {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .progress-track {
+            height: 6px;
+            background: var(--inset);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to bottom, var(--amber-bright), var(--amber));
+            border-radius: 2px;
+            position: relative;
+        }
+
+        .progress-thumb {
+            position: absolute;
+            right: -4px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 8px;
+            background: var(--amber-bright);
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(229,184,75,0.4);
+        }
+
+        /* --- PLAYBACK CONTROLS --- */
+        .playback-controls {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: fit-content;
+            align-self: center;
+        }
+
+        .pb-btn {
+            width: 84px;
+            height: 36px;
+            background: linear-gradient(to bottom, #1C2736, #19212E);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.1s ease;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .pb-btn:hover {
+            border-color: var(--border-highlight);
+            color: var(--text-primary);
+        }
+
+        .pb-btn:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+            background: #101722;
+        }
+
+        .pb-btn.active {
+            color: var(--spotify-green);
+            border-color: var(--spotify-green);
+        }
+
+        .pb-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        .pb-play {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #1C2736 0%, #0F161F 100%);
+            border: 2px solid var(--spotify-green);
+            color: var(--spotify-green);
+            box-shadow: 0 0 12px rgba(30,215,96,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .pb-play svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .pb-like {
+            color: var(--text-secondary);
+        }
+
+        .pb-like.active {
+            color: var(--spotify-green);
+            border-color: var(--spotify-green);
+        }
+
+        /* --- OPEN SPOTIFY --- */
+        .open-spotify {
+            position: relative;
+            z-index: 1;
+            width: 92px;
+            height: 40px;
+            background: linear-gradient(to bottom, #1C2736, #19212E);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            color: var(--text-primary);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.1s ease;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .open-spotify:hover {
+            border-color: var(--spotify-green);
+            color: var(--spotify-green);
+            background: linear-gradient(to bottom, #1A2B21, #101C16);
+        }
+
+        .open-spotify:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+        }
+
+        /* --- WORKSPACE APPLICATIONS --- */
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .app-launcher {
+            background: linear-gradient(to bottom, #1A2330, #151C28);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.1s ease;
+        }
+
+        .app-launcher:hover {
+            border-color: var(--border-highlight);
+            background: linear-gradient(to bottom, #202B3A, #19212E);
+        }
+
+        .app-launcher:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+            background: #0F161F;
+        }
+
+        .app-icon-lg {
+            width: 28px;
+            height: 28px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 800;
+            color: #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .app-name {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        /* App brand colors */
+        .app-chrome { background: #4285F4; }
+        .app-messages { background: #34C759; }
+        .app-chatgpt { background: #10A37F; }
+        .app-teams { background: #6264A7; }
+        .app-slack { background: #4A154B; }
+        .app-outlook { background: #0078D4; }
+        .app-firefox { background: #FF7139; }
+        .app-next { background: #5C6B7E; }
+
+        /* --- UTILS --- */
+        .inset {
+            background: var(--inset);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.25);
+        }
+
+        .flex-1 { flex: 1; }
+        .mt-auto { margin-top: auto; }
+
+        /* Scroll marquee for track name */
+        .marquee-container {
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            width: 100%;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+        }
+
+        .marquee-scroll {
+            animation: marquee 12s linear infinite;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* Responsive height for meeting controls */
+        @media (max-height: 800px) {
+            .album-art { width: 150px; height: 150px; min-width: 150px; }
+            .track-name { font-size: 22px; }
+            .artist-name { font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- TITLE BAR -->
+    <div class="title-bar">
+        <div class="title-left">
+            <div class="app-icon">H</div>
+            <div class="app-title">HAMMERSPOON WORKSTATION CONTROLLER <span>v2.4</span></div>
+        </div>
+        <div class="title-right">
+            <div class="host-info">HOST: LOCALHOST | WORKSTATION CONTROLLER</div>
+            <div class="window-controls">
+                <div class="win-btn min"></div>
+                <div class="win-btn max"></div>
+                <div class="win-btn close"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="workspace">
+        <!-- LEFT COLUMN -->
+        <div class="col">
+            <!-- MEETING CONTROLS -->
+            <div class="panel flex-1">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon"><svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>
+                        Meeting Controls
+                    </div>
+                    <div class="chevron"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg></div>
+                </div>
+                <div class="meeting-grid">
+                    <div class="meeting-control live" id="micBtn" onclick="triggerAction('mute_toggle')">
+                        <div class="meeting-icon"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></div>
+                        <div class="meeting-label" id="micLabel">MIC LIVE</div>
+                    </div>
+                    <div class="meeting-control" id="talkBtn">
+                        <div class="meeting-icon"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></div>
+                        <div class="meeting-label">PUSH TO TALK</div>
+                    </div>
+                    <div class="meeting-control" id="camBtn" onclick="triggerAction('cam_toggle')">
+                        <div class="meeting-icon"><svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg></div>
+                        <div class="meeting-label" id="camLabel">CAMERA</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MACOS AUDIO & MIC DEVICES -->
+            <div class="panel flex-1">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></span>
+                        MacOS Audio &amp; Mic Devices
+                    </div>
+                    <div class="chevron"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg></div>
+                </div>
+                <div class="audio-grid">
+                    <div class="audio-field" id="audioOutputBtn" onclick="triggerAction('audio_cycle')">
+                        <div class="audio-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+                        </div>
+                        <div class="audio-label" id="audioOutputName">Unknown Output</div>
+                    </div>
+                    <div class="audio-field" id="audioMuteBtn" onclick="triggerAction('audio_mute')">
+                        <div class="audio-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.53l2.25 2.25c.22-.66.25-1.38.25-1.75zM19 12c0 .99-.2 1.93-.56 2.79l1.46 1.46C20.88 15.21 21 13.64 21 12c0-3.53-2.61-6.43-6-6.92V2.05c4.49.5 8 4.31 8 8.95zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.4-.32 2.66-.91 3.74-1.74L19.73 21 21 19.73 4.27 3zM12 6.73l2.92 2.92-2.92-2.92V6.73zM12 17.27L9.91 15.18 12 13.09v4.18z"/></svg>
+                        </div>
+                        <div class="audio-label" id="audioMuteLabel">Mute Sound</div>
+                    </div>
+                    <div class="audio-field" onclick="triggerAction('audio_voldown')">
+                        <div class="audio-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 12h2z"/><path d="M18 7h-2v10h2V7z"/></svg>
+                        </div>
+                        <div class="audio-label">Vol -</div>
+                    </div>
+                    <div class="audio-field" onclick="triggerAction('audio_volup')">
+                        <div class="audio-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 12h2z"/><path d="M18 7h-2v4h-4v2h4v4h2v-4h4v-2h-4V7z"/></svg>
+                        </div>
+                        <div class="audio-label">Vol +</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN CAPTURE -->
+            <div class="panel flex-1">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon"><svg viewBox="0 0 24 24"><path d="M9 3L5 6.99h3V14h2V6.99h3L9 3zm7 14.01V10h-2v7.01h-3L15 21l4-3.99h-3z" fill="currentColor"/></svg></span>
+                        Screen Capture &amp; Region
+                    </div>
+                    <div class="chevron"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg></div>
+                </div>
+                <div class="capture-grid">
+                    <div class="capture-control" onclick="triggerAction('snap_copy')">
+                        <div class="capture-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" fill="none" stroke-width="2"/><path d="M9 9h6v6H9z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M15 9l3-3M9 15l-3 3" stroke="currentColor" stroke-width="1.5"/></svg>
+                        </div>
+                        <div class="capture-primary">RECTANGLE → CLIPBOARD</div>
+                        <div class="capture-secondary">CAPTURE AREA</div>
+                    </div>
+                    <div class="capture-control" onclick="triggerAction('snap_file')">
+                        <div class="capture-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" fill="none" stroke-width="2"/><path d="M9 9h6v6H9z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M15 9l3-3M9 15l-3 3" stroke="currentColor" stroke-width="1.5"/></svg>
+                        </div>
+                        <div class="capture-primary">RECTANGLE → FILE</div>
+                        <div class="capture-secondary">SAVE TO DISK</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="col col-right">
+            <!-- SPOTIFY PANEL -->
+            <div class="spotify-panel">
+                <div class="spotify-header">
+                    <div class="spotify-title">
+                        <span class="spotify-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--spotify-green)"/><path d="M17.9 10.9C14.7 8 9.35 8.8 6.97 11.2c-.2.2-.2.5 0 .7l.6.6c.2.2.5.2.7 0 1.9-1.8 5.9-2.4 8.5-.5.3.2.6.1.8-.2l.4-.6c.2-.3 0-.7-.4-.9zm-1.8 2.2c-2.4-2-6.3-1.2-8.2.8-.2.2-.2.5 0 .7l.5.5c.2.2.5.2.7 0 1.3-1.2 4.1-1.8 6.2-.4.3.2.6.1.8-.2l.4-.5c.2-.3.1-.6-.2-.8z" fill="#0A0F12"/></svg></span>
+                        Spotify Media Controller
+                    </div>
+                    <div class="spotify-status" id="spConnection"><span class="status-dot"></span> SPOTIFY CONNECTED</div>
+                </div>
+
+                <div class="now-playing">
+                    <div class="album-art">
+                        <img id="albumArt" src="" alt="Album Art">
+                        <div class="album-placeholder" id="albumPlaceholder">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+                        </div>
+                    </div>
+                    <div class="track-info">
+                        <div class="now-playing-label"><span class="status-dot"></span> NOW PLAYING</div>
+                        <div class="track-name marquee-container">
+                            <div class="marquee-content" id="trackName">Plush (Acoustic)</div>
+                        </div>
+                        <div class="artist-name" id="artistName">Stone Temple Pilots</div>
+                        <div class="album-name" id="albumName">Thank You (20th Anniversary Super Deluxe)</div>
+                        <div class="track-meta">
+                            <span>ACOUSTIC</span>
+                            <span>ROCK</span>
+                            <span>1994</span>
+                        </div>
+                        <div class="tech-meta" id="techMeta">320 kbps • 44.1 kHz</div>
+                    </div>
+                </div>
+
+                <div class="visualizer-wrap">
+                    <canvas id="vizCanvas"></canvas>
+                </div>
+
+                <div class="progress-wrap">
+                    <div class="progress-times">
+                        <span id="posTime">00:18</span>
+                        <span id="durTime">04:43</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progressFill" style="width: 0%"><div class="progress-thumb"></div></div>
+                    </div>
+                </div>
+
+                <div class="playback-controls">
+                    <button class="pb-btn" id="repBtn" onclick="triggerAction('spotify_repeat')">
+                        <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                    </button>
+                    <button class="pb-btn" id="shufBtn" onclick="triggerAction('spotify_shuffle')">
+                        <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.53 2.53L19.29 4l.71.71-2.53 2.53L23 10.49 22.29 11.2 18.82 7.73l-3.96 3.96L11.4 8.23l3.96-3.96-2.53-2.53.71-.71 2.53 2.53.71-.71zM10.59 14.83l-5.17 5.17L4 19.41 9.17 14.24l1.42 1.59zM14.5 20l-2.53-2.53L11.26 20l-.71-.71 2.53-2.53-.71-.71 3.47-3.47 1.42 1.41-3.47 3.47 2.53 2.53-.71.71-2.53-2.53L13.79 20h.71z"/></svg>
+                    </button>
+                    <button class="pb-btn" onclick="triggerAction('spotify_prev')">
+                        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z"/></svg>
+                    </button>
+                    <button class="pb-btn pb-play" id="playPauseBtn" onclick="triggerAction('spotify_playpause')">
+                        <svg id="playIcon" viewBox="0 0 24 24" style="display: none;"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="pauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button class="pb-btn" onclick="triggerAction('spotify_next')">
+                        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                    </button>
+                    <button class="pb-btn pb-like" id="likeBtn" onclick="triggerAction('spotify_like')">
+                        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    </button>
+                    <button class="pb-btn open-spotify" id="openSpotify" onclick="triggerAction('spotify_open')" title="Open Spotify">
+                        <svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--spotify-green)"/><path d="M17.9 10.9C14.7 8 9.35 8.8 6.97 11.2c-.2.2-.2.5 0 .7l.6.6c.2.2.5.2.7 0 1.9-1.8 5.9-2.4 8.5-.5.3.2.6.1.8-.2l.4-.6c.2-.3 0-.7-.4-.9zm-1.8 2.2c-2.4-2-6.3-1.2-8.2.8-.2.2-.2.5 0 .7l.5.5c.2.2.5.2.7 0 1.3-1.2 4.1-1.8 6.2-.4.3.2.6.1.8-.2l.4-.5c.2-.3.1-.6-.2-.8z" fill="#0A0F12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- WORKSPACE APPLICATIONS -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zM4 20h16V4H4v16z"/></svg></span>
+                        Workspace Applications
+                    </div>
+                    <div class="chevron"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg></div>
+                </div>
+                <div class="apps-grid">
+                    <div class="app-launcher" onclick="triggerAction('app_chrome')">
+                        <div class="app-icon-lg app-chrome">C</div>
+                        <div class="app-name">Chrome</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('app_messages')">
+                        <div class="app-icon-lg app-messages">M</div>
+                        <div class="app-name">Messages</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('app_chatgpt')">
+                        <div class="app-icon-lg app-chatgpt">C</div>
+                        <div class="app-name">ChatGPT</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('app_teams')">
+                        <div class="app-icon-lg app-teams">T</div>
+                        <div class="app-name">Teams</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('app_slack')">
+                        <div class="app-icon-lg app-slack">S</div>
+                        <div class="app-name">Slack</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('app_outlook')">
+                        <div class="app-icon-lg app-outlook">O</div>
+                        <div class="app-name">Outlook</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('app_firefox')">
+                        <div class="app-icon-lg app-firefox">F</div>
+                        <div class="app-name">Firefox</div>
+                    </div>
+                    <div class="app-launcher" onclick="triggerAction('window_next_screen')">
+                        <div class="app-icon-lg app-next">N</div>
+                        <div class="app-name">Next Display</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Actions ---
+        function triggerAction(action) {
+            fetch('/api/action/' + action, { method: 'POST' })
+                .catch(e => console.log('Action failed:', e));
+            setTimeout(updateStatus, 150);
+        }
+
+        // --- Talk button touch handlers ---
+        const talkBtn = document.getElementById('talkBtn');
+        if (talkBtn) {
+            const startTalk = () => fetch('/api/action/talk_start', { method: 'POST' }).catch(()=>{});
+            const stopTalk = () => fetch('/api/action/talk_stop', { method: 'POST' }).catch(()=>{});
+            talkBtn.addEventListener('mousedown', startTalk);
+            talkBtn.addEventListener('mouseup', stopTalk);
+            talkBtn.addEventListener('mouseleave', stopTalk);
+            talkBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startTalk(); });
+            talkBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopTalk(); });
+        }
+
+        // --- Formatting ---
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        let lastTrack = '';
+
+        function updateMarquee(track) {
+            const el = document.getElementById('trackName');
+            if (track === lastTrack) return;
+            lastTrack = track;
+            el.textContent = track;
+            el.classList.remove('marquee-scroll');
+            // Force reflow
+            void el.offsetWidth;
+            // Only scroll if text overflows
+            if (el.scrollWidth > el.parentElement.clientWidth) {
+                // Duplicate content for seamless loop
+                el.textContent = track + '\u00A0\u00A0\u00A0\u00A0' + track;
+                el.classList.add('marquee-scroll');
+            }
+        }
+
+        // --- Visualizer ---
+        const canvas = document.getElementById('vizCanvas');
+        const ctx = canvas.getContext('2d');
+        let bars = [];
+        const barCount = 64;
+        let vizActive = false;
+        let vizRaf = null;
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = canvas.clientHeight * window.devicePixelRatio;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        for (let i = 0; i < barCount; i++) {
+            bars.push({ h: 0.1, target: Math.random() });
+        }
+
+        function drawVisualizer() {
+            if (!vizActive) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            const w = canvas.width;
+            const h = canvas.height;
+            const gap = 2;
+            const barW = (w - (barCount + 1) * gap) / barCount;
+
+            ctx.clearRect(0, 0, w, h);
+
+            for (let i = 0; i < barCount; i++) {
+                const b = bars[i];
+                b.h += (b.target - b.h) * 0.15;
+                if (Math.random() < 0.1) b.target = Math.random();
+
+                const barH = Math.max(2, b.h * h);
+                const x = gap + i * (barW + gap);
+                const y = h - barH;
+
+                const grad = ctx.createLinearGradient(0, h, 0, y);
+                grad.addColorStop(0, '#063A25');
+                grad.addColorStop(1, '#1ED760');
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, y, barW, barH);
+            }
+
+            vizRaf = requestAnimationFrame(drawVisualizer);
+        }
+
+        function setVisualizer(active) {
+            vizActive = active;
+            if (active && !vizRaf) drawVisualizer();
+            else if (!active && vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
+        }
+
+        // --- Status polling ---
+        function updateStatus() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    // Mic
+                    const micBtn = document.getElementById('micBtn');
+                    const micLabel = document.getElementById('micLabel');
+                    if (data.micMuted) {
+                        micBtn.classList.remove('live');
+                        micLabel.textContent = 'MIC MUTED';
+                    } else {
+                        micBtn.classList.add('live');
+                        micLabel.textContent = 'MIC LIVE';
+                    }
+
+                    // Audio
+                    if (data.audio) {
+                        const outName = data.audio.name || 'Unknown Output';
+                        const vol = data.audio.volume || 0;
+                        const isMuted = data.audio.isMuted;
+
+                        document.getElementById('audioOutputName').textContent = outName;
+
+                        const audioMuteBtn = document.getElementById('audioMuteBtn');
+                        const audioMuteLabel = document.getElementById('audioMuteLabel');
+                        if (isMuted) {
+                            audioMuteBtn.classList.add('muted');
+                            audioMuteLabel.textContent = 'SOUND MUTED';
+                        } else {
+                            audioMuteBtn.classList.remove('muted');
+                            audioMuteLabel.textContent = 'MUTE SOUND (' + vol + '%)';
+                        }
+                    }
+
+                    // Spotify
+                    if (data.spotify) {
+                        const sp = data.spotify;
+                        const track = sp.track || 'No Track';
+                        const artist = sp.artist || '';
+                        const album = sp.album || '';
+
+                        document.getElementById('trackName').textContent = track;
+                        updateMarquee(track);
+                        document.getElementById('artistName').textContent = artist;
+                        document.getElementById('albumName').textContent = album;
+
+                        const conn = document.getElementById('spConnection');
+                        if (sp.isRunning) {
+                            conn.innerHTML = '<span class="status-dot"></span> SPOTIFY CONNECTED';
+                            conn.style.color = 'var(--green)';
+                        } else {
+                            conn.innerHTML = '<span class="status-dot" style="background:var(--text-muted);box-shadow:none"></span> SPOTIFY IDLE';
+                            conn.style.color = 'var(--text-secondary)';
+                        }
+
+                        const pos = sp.position || 0;
+                        const dur = sp.duration || 1;
+                        const pct = dur ? (pos / dur * 100) : 0;
+                        document.getElementById('posTime').textContent = formatTime(pos);
+                        document.getElementById('durTime').textContent = formatTime(dur);
+                        document.getElementById('progressFill').style.width = pct + '%';
+
+                        const playIcon = document.getElementById('playIcon');
+                        const pauseIcon = document.getElementById('pauseIcon');
+                        if (sp.isPlaying) {
+                            playIcon.style.display = 'none';
+                            pauseIcon.style.display = 'block';
+                        } else {
+                            playIcon.style.display = 'block';
+                            pauseIcon.style.display = 'none';
+                        }
+
+                        document.getElementById('shufBtn').classList.toggle('active', sp.shuffle);
+                        document.getElementById('repBtn').classList.toggle('active', sp.repeatState);
+
+                        setVisualizer(sp.isPlaying);
+                    }
+                })
+                .catch(err => console.log('Status error:', err));
+        }
+
+        setInterval(updateStatus, 1000);
+        updateStatus();
+
+        // Register service worker for PWA installability
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>

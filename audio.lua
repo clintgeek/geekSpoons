@@ -136,6 +136,7 @@ function audio.getStatus()
         name = outDev and outDev:name() or "Speaker",
         inputName = inDev and inDev:name() or "Microphone",
         volume = audio.getVolume(),
+        inputVolume = inDev and math.floor(inDev:volume() or 0) or 0,
         isMuted = audio.isMuted()
     }
 end
