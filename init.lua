@@ -27,7 +27,12 @@ local audio = require("audio")
 local screenshot = require("screenshot")
 local record = require("record")
 local apps = require("apps")
+local attention = require("attention")
+local outlookProvider = require("providers.outlook")
 local server = require("server")
+
+-- Register attention providers
+attention.register("outlook", outlookProvider.getAttention)
 
 -- Start Stream Deck HTTP Server on port 8080 & 8443
 server.start()

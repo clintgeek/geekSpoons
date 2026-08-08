@@ -10,6 +10,7 @@ local audio = require("audio")
 local screenshot = require("screenshot")
 local record = require("record")
 local apps = require("apps")
+local attention = require("attention")
 
 local httpServer = nil
 local httpsServer = nil
@@ -2252,7 +2253,8 @@ local function handleRequest(method, path, headers, body)
         local data = {
             micMuted = mute.isMuted(),
             audio = audio.getStatus(),
-            spotify = spotify.getStatus()
+            spotify = spotify.getStatus(),
+            attention = attention.getStatus()
         }
         return jsonResponse(data)
     elseif path:find("/api/action/play_uri") then
