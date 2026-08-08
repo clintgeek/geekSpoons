@@ -11,6 +11,7 @@ local screenshot = require("screenshot")
 local record = require("record")
 local apps = require("apps")
 local attention = require("attention")
+local camera = require("camera")
 
 local httpServer = nil
 local port = 8080
@@ -2252,7 +2253,8 @@ local function handleRequest(method, path, headers, body)
             micMuted = mute.isMuted(),
             audio = audio.getStatus(),
             spotify = spotify.getStatus(),
-            attention = attention.getStatus()
+            attention = attention.getStatus(),
+            camera = camera.getStatus(),
         }
         return jsonResponse(data)
     elseif path == "/api/debug/attention" then
@@ -2286,21 +2288,25 @@ local function handleRequest(method, path, headers, body)
             end)
         end
         return jsonResponse({status = "ok"})
-    elseif path:sub(1, 12) == "/api/action/" then
+elseif path:sub(1, 12) == "/api/action/" then
         local action = path:sub(13)
 
         if action == "mute_toggle" then
-            hs.timer.doAfter(0, mute.toggleMute)
+            local muted = mute.toggleMute()
+            return jsonResponse({status = "ok", micMuted = muted})
         elseif action == "talk_start" then
-            hs.timer.doAfter(0, mute.startTalk)
+            local muted = mute.startTalk()
+            return jsonResponse({status = "ok", micMuted = muted})
         elseif action == "talk_stop" then
-            hs.timer.doAfter(0, mute.stopTalk)
+            local muted = mute.stopTalk()
+            return jsonResponse({status = "ok", micMuted = muted})
         elseif action == "cam_toggle" then
             hs.timer.doAfter(0, meeting.toggleCamera)
         elseif action == "audio_cycle" then
             hs.timer.doAfter(0, audio.cycleOutput)
         elseif action == "audio_mute" then
-            hs.timer.doAfter(0, audio.toggleMute)
+            local muted = audio.toggleMute()
+            return jsonResponse({status = "ok", audioMuted = muted})
         elseif action == "audio_volup" then
             hs.timer.doAfter(0, audio.volumeUp)
         elseif action == "audio_voldown" then

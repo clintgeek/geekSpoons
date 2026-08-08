@@ -1,7 +1,11 @@
--- mute.lua: Microphone hardware mute controller with HUD indicator
+-- mute.lua: Microphone mute controller with HUD indicator
+-- Uses input volume as a soft mute (0 = muted, restore previous volume on unmute)
+-- because the Plugable Audio dock doesn't support hardware input muting via CoreAudio.
+
 local mute = {}
 
 local muteCanvas = nil
+local savedInputVolume = nil  -- volume to restore on unmute
 
 local function showMuteHUD(isMuted)
     if muteCanvas then
@@ -53,7 +57,8 @@ end
 function mute.isMuted()
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
-        return dev:muted()
+        local vol = dev:inputVolume()
+        return vol ~= nil and vol == 0
     end
     return false
 end
@@ -61,10 +66,20 @@ end
 function mute.toggleMute()
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
-        local newState = not dev:muted()
-        dev:setMuted(newState)
-        showMuteHUD(newState)
-        return newState
+        local vol = dev:inputVolume() or 0
+        if vol == 0 then
+            -- Unmute: restore saved volume (or default to 73)
+            local restoreVol = savedInputVolume or 73
+            dev:setInputVolume(restoreVol)
+            hs.timer.doAfter(0, function() showMuteHUD(false) end)
+            return false
+        else
+            -- Mute: save current volume and set to 0
+            savedInputVolume = vol
+            dev:setInputVolume(0)
+            hs.timer.doAfter(0, function() showMuteHUD(true) end)
+            return true
+        end
     end
     return false
 end
@@ -72,8 +87,14 @@ end
 function mute.setMute(state)
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
-        dev:setMuted(state)
-        showMuteHUD(state)
+        if state then
+            local vol = dev:inputVolume() or 0
+            if vol > 0 then savedInputVolume = vol end
+            dev:setInputVolume(0)
+        else
+            dev:setInputVolume(savedInputVolume or 73)
+        end
+        hs.timer.doAfter(0, function() showMuteHUD(state) end)
         return state
     end
     return false
@@ -83,17 +104,23 @@ end
 function mute.startTalk()
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
-        dev:setMuted(false)
-        showMuteHUD(false)
+        dev:setInputVolume(savedInputVolume or 73)
+        hs.timer.doAfter(0, function() showMuteHUD(false) end)
+        return false
     end
+    return mute.isMuted()
 end
 
 function mute.stopTalk()
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
-        dev:setMuted(true)
-        showMuteHUD(true)
+        local vol = dev:inputVolume() or 0
+        if vol > 0 then savedInputVolume = vol end
+        dev:setInputVolume(0)
+        hs.timer.doAfter(0, function() showMuteHUD(true) end)
+        return true
     end
+    return mute.isMuted()
 end
 
 return mute
