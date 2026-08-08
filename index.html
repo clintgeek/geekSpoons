@@ -582,48 +582,6 @@
             z-index: 1;
         }
 
-        .album-art {
-            width: 180px;
-            height: 180px;
-            min-width: 180px;
-            background: #0A0E12;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-            overflow: hidden;
-            position: relative;
-        }
-
-        .album-art img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: none;
-        }
-
-        .album-art img.visible { display: block; }
-
-        .album-placeholder {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #121A22 0%, #0A0F13 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-            gap: 10px;
-        }
-
-        .album-placeholder svg {
-            width: 48px;
-            height: 48px;
-            fill: #2A3A48;
-        }
-
         .track-info {
             flex: 1;
             display: flex;
@@ -644,7 +602,7 @@
         }
 
         .track-name {
-            font-size: 26px;
+            font-size: 32px;
             font-weight: 800;
             color: var(--text-primary);
             letter-spacing: -0.01em;
@@ -655,7 +613,7 @@
         }
 
         .artist-name {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
             color: var(--amber);
             letter-spacing: 0.02em;
@@ -965,9 +923,8 @@
 
         /* Responsive height for meeting controls */
         @media (max-height: 800px) {
-            .album-art { width: 150px; height: 150px; min-width: 150px; }
-            .track-name { font-size: 22px; }
-            .artist-name { font-size: 16px; }
+            .track-name { font-size: 24px; }
+            .artist-name { font-size: 18px; }
         }
     </style>
 </head>
@@ -1095,12 +1052,6 @@
                 </div>
 
                 <div class="now-playing">
-                    <div class="album-art">
-                        <img id="albumArt" src="" alt="Album Art">
-                        <div class="album-placeholder" id="albumPlaceholder">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
-                        </div>
-                    </div>
                     <div class="track-info">
                         <div class="now-playing-label"><span class="status-dot"></span> NOW PLAYING</div>
                         <div class="track-name marquee-container">
