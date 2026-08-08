@@ -13,9 +13,7 @@ local apps = require("apps")
 local attention = require("attention")
 
 local httpServer = nil
-local httpsServer = nil
 local port = 8080
-local httpsPort = 8443
 
 local function corsHeaders(contentType)
     return {
@@ -2257,6 +2255,26 @@ local function handleRequest(method, path, headers, body)
             attention = attention.getStatus()
         }
         return jsonResponse(data)
+    elseif path == "/api/debug/attention" then
+        local data = {
+            cached = attention.getStatus(),
+            windows = {},
+        }
+        -- Get window titles via hs.window (faster than AXUIElement)
+        for _, appName in ipairs({"Microsoft Outlook", "MSTeams", "Slack", "Messages"}) do
+            local app = hs.application.find(appName)
+            if app then
+                local wins = app:allWindows()
+                local titles = {}
+                for _, w in ipairs(wins) do
+                    table.insert(titles, w:title())
+                end
+                data.windows[appName] = { pid = app:pid(), titles = titles }
+            else
+                data.windows[appName] = { found = false }
+            end
+        end
+        return jsonResponse(data)
     elseif path:find("/api/action/play_uri") then
         local track = path:match("track=([^&]+)")
         local context = path:match("context=([^&]+)")
@@ -2345,7 +2363,6 @@ end
 
 function server.start()
     if httpServer then httpServer:stop() end
-    if httpsServer then httpsServer:stop() end
 
     -- Start HTTP Server on 8080
     httpServer = hs.httpserver.new(false, true)
@@ -2354,19 +2371,6 @@ function server.start()
     httpServer:setCallback(handleRequest)
     httpServer:start()
     print("Stream Deck HTTP Server running on port " .. port)
-
-    -- Start HTTPS Server on 8443 with self-signed certificate
-    local ok, err = pcall(function()
-        httpsServer = hs.httpserver.new(true, true)
-        httpsServer:setName("Hammerspoon Stream Deck HTTPS")
-        httpsServer:setPort(httpsPort)
-        httpsServer:setCallback(handleRequest)
-        httpsServer:start()
-        print("Stream Deck HTTPS Server running on port " .. httpsPort)
-    end)
-    if not ok then
-        print("HTTPS Server note:", err)
-    end
 end
 
 return server

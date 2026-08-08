@@ -1,41 +1,76 @@
 -- providers/outlook.lua: Outlook unread mail attention provider
--- Tier 2: Uses macOS dock badge (hs.application.dockIconBadge) to detect unread count.
--- Falls back to 0 if Outlook is not running or badge is not a number.
+-- Uses accessibility (AXUIElement) to read unread counts from the Outlook sidebar.
+-- New Outlook (16.111+) doesn't expose Exchange messages via AppleScript, but the
+-- navigation pane shows "FolderName; N unread messages" in cell descriptions.
 
 local outlook = {}
 
-local OUTLOOK_BUNDLE = "com.microsoft.Outlook"
-local OUTLOOK_NAME = "Outlook"
+-- Recursively search for AXCell elements with "; N unread messages" in their description
+local function findUnreadInCells(elem, found, depth)
+    if not elem or depth > 10 then return end
 
-local function getDockBadge()
-    local app = hs.application.find(OUTLOOK_BUNDLE)
-    if not app then
-        app = hs.application.find(OUTLOOK_NAME)
+    local role = elem:attributeValue("AXRole")
+    local desc = elem:attributeValue("AXDescription")
+
+    -- Match cells like "Inbox; 9 unread messages"
+    if role == "AXCell" and desc then
+        local descStr = tostring(desc)
+        local folderName, count = descStr:match("^(.-);%s*(%d+)%s+unread%s+messages")
+        if folderName and count then
+            local n = tonumber(count) or 0
+            -- Only count Inbox (skip Deleted Items, Junk, Promotions, etc.)
+            if folderName:lower() == "inbox" and n > 0 then
+                table.insert(found, { folder = folderName, count = n })
+            end
+        end
     end
-    if not app then return nil end
 
-    -- dockIconBadge returns the badge text as a string
-    local badge = app:dockIconBadge()
-    if not badge or badge == "" then return 0 end
-
-    -- Strip non-numeric characters (e.g. "!" for some apps)
-    local num = tonumber(badge:gsub("[^%d]", ""))
-    return num or 0
+    local children = elem:attributeValue("AXChildren")
+    if children then
+        for _, child in ipairs(children) do
+            findUnreadInCells(child, found, depth + 1)
+        end
+    end
 end
 
--- Returns normalized attention state for Outlook
 function outlook.getAttention()
-    local count = getDockBadge() or 0
-    if count == 0 then
+    local app = hs.application.find("Microsoft Outlook")
+    if not app then
         return { severity = "none", count = 0, label = "" }
     end
 
-    -- Tier 2 doesn't distinguish mention vs unread; treat all as "attention"
-    -- unless the count is very high, which we leave as attention (not urgent).
+    local elem = hs.axuielement.applicationElement(app)
+    if not elem then
+        return { severity = "none", count = 0, label = "" }
+    end
+
+    -- Find the Inbox window (not the Reminders window)
+    local windows = elem:attributeValue("AXWindows")
+    if not windows then
+        return { severity = "none", count = 0, label = "" }
+    end
+
+    local found = {}
+    for _, win in ipairs(windows) do
+        local title = win:attributeValue("AXTitle")
+        if title and tostring(title):match("Inbox") then
+            findUnreadInCells(win, found, 0)
+        end
+    end
+
+    local totalCount = 0
+    for _, item in ipairs(found) do
+        totalCount = totalCount + item.count
+    end
+
+    if totalCount == 0 then
+        return { severity = "none", count = 0, label = "" }
+    end
+
     return {
         severity = "attention",
-        count = count,
-        label = count .. " unread"
+        count = totalCount,
+        label = totalCount .. " unread"
     }
 end
 

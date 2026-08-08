@@ -1576,12 +1576,12 @@
         }
 
         // --- Attention state ---
-        // Mock data for now; will be replaced by real provider data from /api/status
-        const mockAttention = {
-            slack:    { severity: 'attention', count: 7,  label: '2 mentions' },
-            teams:    { severity: 'urgent',    count: 1,  label: '1 direct message' },
-            outlook:  { severity: 'attention', count: 12, label: '12 unread' },
-            messages: { severity: 'none',      count: 0,  label: '' },
+        // Default empty state; real data comes from /api/status via providers
+        const defaultAttention = {
+            slack:    { severity: 'none', count: 0, label: '' },
+            teams:    { severity: 'none', count: 0, label: '' },
+            outlook:  { severity: 'none', count: 0, label: '' },
+            messages: { severity: 'none', count: 0, label: '' },
         };
 
         function updateAttention(state) {
@@ -1657,17 +1657,17 @@
             modal.classList.toggle('active');
         }
 
-        // Apply mock attention state on load (replaced by real data from status polling)
-        updateAttention(mockAttention);
+        // Apply default attention state on load; real data comes from status polling
+        updateAttention(defaultAttention);
 
-        // Merge real attention data into mock state when available from /api/status
+        // Merge real attention data from /api/status providers
         function mergeAttention(realState) {
             if (!realState) return;
             const merged = {};
-            for (const appId in mockAttention) {
-                merged[appId] = realState[appId] || mockAttention[appId];
+            for (const appId in defaultAttention) {
+                merged[appId] = realState[appId] || defaultAttention[appId];
             }
-            // Include any apps from real state not in mock
+            // Include any apps from real state not in defaults
             for (const appId in realState) {
                 if (!merged[appId]) merged[appId] = realState[appId];
             }

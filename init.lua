@@ -29,12 +29,21 @@ local record = require("record")
 local apps = require("apps")
 local attention = require("attention")
 local outlookProvider = require("providers.outlook")
+local slackProvider = require("providers.slack")
+local teamsProvider = require("providers.teams")
+local messagesProvider = require("providers.messages")
 local server = require("server")
 
 -- Register attention providers
 attention.register("outlook", outlookProvider.getAttention)
+attention.register("slack", slackProvider.getAttention)
+attention.register("teams", teamsProvider.getAttention)
+attention.register("messages", messagesProvider.getAttention)
 
--- Start Stream Deck HTTP Server on port 8080 & 8443
+-- Start background attention refresh (caches provider data every 10s)
+attention.start()
+
+-- Start Stream Deck HTTP Server on port 8080
 server.start()
 
 -- Global Hotkey Bindings (Mac keyboard backups)
