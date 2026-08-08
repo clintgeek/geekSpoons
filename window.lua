@@ -1,5 +1,23 @@
--- window.lua: Window layout and workspace management helpers
+-- window.lua: Window layout, multi-monitor movement, and workspace management helpers
 local winManager = {}
+
+function winManager.moveToNextScreen()
+    local win = hs.window.focusedWindow()
+    if not win then
+        hs.alert.show("No Focused Window")
+        return
+    end
+
+    local currentScreen = win:screen()
+    local nextScreen = currentScreen:next()
+
+    if nextScreen and nextScreen ~= currentScreen then
+        win:moveToScreen(nextScreen, true, true, 0)
+        hs.alert.show("🖥️ Moved to " .. (nextScreen:name() or "Next Display"))
+    else
+        hs.alert.show("🖥️ Single Display Detected")
+    end
+end
 
 function winManager.split5050()
     local win = hs.window.focusedWindow()

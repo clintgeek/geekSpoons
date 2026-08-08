@@ -1,8 +1,12 @@
--- audio.lua: Master macOS system audio controls and output device switcher
+-- audio.lua: Master macOS system audio & microphone device switcher
 local audio = {}
 
 function audio.getDefaultOutput()
     return hs.audiodevice.defaultOutputDevice()
+end
+
+function audio.getDefaultInput()
+    return hs.audiodevice.defaultInputDevice()
 end
 
 function audio.getVolume()
@@ -53,6 +57,7 @@ function audio.volumeDown()
     return 0
 end
 
+-- Synchronized Output & Input Device Switcher
 function audio.cycleOutput()
     local outputs = hs.audiodevice.allOutputDevices()
     if #outputs <= 1 then
@@ -75,16 +80,61 @@ function audio.cycleOutput()
     local nextDev = outputs[nextIndex]
     if nextDev then
         nextDev:setDefaultOutputDevice()
-        hs.alert.show("🔊 Output: " .. nextDev:name())
-        return nextDev:name()
+        
+        -- Also match and set corresponding input device (e.g. AirPods, USB mic, headset)
+        local devName = nextDev:name()
+        local inputs = hs.audiodevice.allInputDevices()
+        local matchedInput = false
+        for _, inDev in ipairs(inputs) do
+            if inDev:name() == devName or string.find(inDev:name(), devName, 1, true) or string.find(devName, inDev:name(), 1, true) then
+                inDev:setDefaultInputDevice()
+                matchedInput = true
+                break
+            end
+        end
+
+        if matchedInput then
+            hs.alert.show("🎧 Audio & Mic: " .. devName)
+        else
+            hs.alert.show("🔊 Output: " .. devName)
+        end
+        return devName
     end
     return "Speaker"
 end
 
+-- Dedicated Input Mic Device Switcher
+function audio.cycleInput()
+    local inputs = hs.audiodevice.allInputDevices()
+    if #inputs <= 1 then
+        return inputs[1] and inputs[1]:name() or "Built-in Mic"
+    end
+
+    local current = audio.getDefaultInput()
+    local nextIndex = 1
+
+    for i, dev in ipairs(inputs) do
+        if current and dev:uid() == current:uid() then
+            nextIndex = (i % #inputs) + 1
+            break
+        end
+    end
+
+    local nextDev = inputs[nextIndex]
+    if nextDev then
+        nextDev:setDefaultInputDevice()
+        hs.alert.show("🎙️ Input Mic: " .. nextDev:name())
+        return nextDev:name()
+    end
+    return "Microphone"
+end
+
 function audio.getStatus()
-    local dev = audio.getDefaultOutput()
+    local outDev = audio.getDefaultOutput()
+    local inDev = audio.getDefaultInput()
     return {
-        name = dev and dev:name() or "Speaker",
+        name = outDev and outDev:name() or "Speaker",
+        inputName = inDev and inDev:name() or "Microphone",
         volume = audio.getVolume(),
         isMuted = audio.isMuted()
     }

@@ -20,6 +20,7 @@ configFileWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", re
 -- Load core modules
 local spotify = require("spotify")
 local mute = require("mute")
+local meeting = require("meeting")
 local winManager = require("window")
 local browser = require("browser")
 local audio = require("audio")
@@ -27,7 +28,7 @@ local screenshot = require("screenshot")
 local apps = require("apps")
 local server = require("server")
 
--- Start Stream Deck HTTP Server on port 8080
+-- Start Stream Deck HTTP Server on port 8080 & 8443
 server.start()
 
 -- Global Hotkey Bindings (Mac keyboard backups)
@@ -53,5 +54,3 @@ end)
 hs.hotkey.bind(hyper, "S", function()
     winManager.split5050()
 end)
-
-hs.alert.show("Hammerspoon loaded! Stream Deck active on port 8080")

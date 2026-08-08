@@ -1,8 +1,9 @@
--- server.lua: Embedded HTTP server for Android Tablet Stream Deck (Strict Fixed-Width GEEKAMP Marquee)
+-- server.lua: Embedded HTTP & HTTPS server for Android Tablet Stream Deck (Explicit Load Button Touch Handlers)
 local server = {}
 
 local spotify = require("spotify")
 local mute = require("mute")
+local meeting = require("meeting")
 local winManager = require("window")
 local browser = require("browser")
 local audio = require("audio")
@@ -10,7 +11,9 @@ local screenshot = require("screenshot")
 local apps = require("apps")
 
 local httpServer = nil
+local httpsServer = nil
 local port = 8080
+local httpsPort = 8443
 
 local function corsHeaders(contentType)
     return {
@@ -27,12 +30,66 @@ local function jsonResponse(data)
     return jsonStr, 200, corsHeaders("application/json")
 end
 
+local function getManifestJSON()
+    local manifest = {
+        name = "GEEKAMP Stream Deck",
+        short_name = "StreamDeck",
+        description = "Standalone Android Tablet Stream Deck & GEEKAMP Media Controller",
+        start_url = "/",
+        scope = "/",
+        display = "fullscreen",
+        orientation = "landscape",
+        background_color = "#060911",
+        theme_color = "#060911",
+        icons = {
+            {
+                src = "/icon.svg",
+                sizes = "512x512",
+                type = "image/svg+xml",
+                purpose = "any maskable"
+            }
+        }
+    }
+    return hs.json.encode(manifest), 200, corsHeaders("application/manifest+json")
+end
+
+local function getServiceWorkerJS()
+    local sw = [[
+        self.addEventListener('install', (e) => self.skipWaiting());
+        self.addEventListener('activate', (e) => self.clients.claim());
+        self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));
+    ]]
+    return sw, 200, corsHeaders("application/javascript")
+end
+
+local function getIconSVG()
+    local svg = [[<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+        <rect width="512" height="512" rx="100" fill="#060911"/>
+        <circle cx="256" cy="256" r="200" fill="rgba(168, 85, 247, 0.2)" stroke="#00ff41" stroke-width="8"/>
+        <text x="256" y="320" font-size="220" text-anchor="middle" fill="#00ff41" font-family="-apple-system, sans-serif" font-weight="bold">⚡</text>
+    </svg>]]
+    return svg, 200, corsHeaders("image/svg+xml")
+end
+
 local function getHTML()
     return [[<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA Fullscreen Chromeless Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#060911">
+    <meta name="application-name" content="Stream Deck">
+    <meta name="apple-mobile-web-app-title" content="Stream Deck">
+    
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link rel="apple-touch-icon" href="/icon.svg">
+
     <title>Stream Deck</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -79,10 +136,11 @@ local function getHTML()
                 radial-gradient(at 50% 100%, rgba(0, 255, 65, 0.08) 0px, transparent 55%);
             background-attachment: fixed;
             color: var(--text-primary);
-            height: 100vh;
+            height: 100dvh;
+            max-height: -webkit-fill-available;
             width: 100vw;
             overflow: hidden;
-            padding: 14px 18px;
+            padding: max(10px, env(safe-area-inset-top)) 14px max(10px, env(safe-area-inset-bottom)) 14px;
             display: flex;
             flex-direction: column;
             position: relative;
@@ -91,7 +149,7 @@ local function getHTML()
         .main-deck {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 14px;
+            gap: 12px;
             flex: 1;
             min-height: 0;
             min-width: 0;
@@ -100,7 +158,7 @@ local function getHTML()
         .col {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
             height: 100%;
             min-width: 0;
             overflow: hidden;
@@ -111,11 +169,11 @@ local function getHTML()
             border: 1px solid var(--border-card);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border-radius: 18px;
-            padding: 14px;
+            border-radius: 16px;
+            padding: 10px 12px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             flex: 1;
             min-width: 0;
@@ -123,7 +181,7 @@ local function getHTML()
 
         .section-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 700;
             color: var(--text-secondary);
             text-transform: uppercase;
@@ -135,7 +193,7 @@ local function getHTML()
 
         .grid {
             display: grid;
-            gap: 10px;
+            gap: 8px;
             flex: 1;
         }
 
@@ -146,13 +204,13 @@ local function getHTML()
         .tile {
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid var(--border-card);
-            border-radius: 14px;
-            padding: 10px 8px;
+            border-radius: 12px;
+            padding: 8px 6px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 4px;
             cursor: pointer;
             transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -170,12 +228,12 @@ local function getHTML()
         }
 
         .tile-icon {
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35));
         }
 
         .tile-label {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             font-weight: 700;
             color: var(--text-primary);
             text-align: center;
@@ -206,10 +264,10 @@ local function getHTML()
             background: var(--winamp-metal);
             border: 2px solid var(--winamp-border);
             border-radius: 14px;
-            padding: 12px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 1px 1px 0 #555, inset -1px -1px 0 #111;
             flex: 1.35;
             width: 100%;
@@ -246,10 +304,10 @@ local function getHTML()
             background: #000;
             border: 2px inset #222;
             border-radius: 8px;
-            padding: 10px;
+            padding: 8px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
             box-shadow: inset 0 0 10px rgba(0,255,65,0.15);
             width: 100%;
             max-width: 100%;
@@ -266,7 +324,7 @@ local function getHTML()
 
         .winamp-timer {
             font-family: 'VT323', monospace;
-            font-size: 2.2rem;
+            font-size: 2.1rem;
             color: var(--winamp-green);
             text-shadow: 0 0 8px var(--winamp-green);
             line-height: 1;
@@ -287,8 +345,8 @@ local function getHTML()
             background: #041004;
             border: 1px solid #005500;
             border-radius: 6px;
-            padding: 6px 10px;
-            height: 34px;
+            padding: 5px 8px;
+            height: 32px;
             width: 100%;
             max-width: 100%;
             min-width: 0;
@@ -300,7 +358,7 @@ local function getHTML()
 
         .winamp-marquee-text {
             font-family: 'VT323', monospace;
-            font-size: 1.3rem;
+            font-size: 1.25rem;
             color: #00ff41;
             text-shadow: 0 0 6px #00ff41;
             line-height: 1;
@@ -342,7 +400,7 @@ local function getHTML()
             display: flex;
             align-items: flex-end;
             gap: 4px;
-            height: 28px;
+            height: 26px;
             background: #020802;
             border: 1px solid #002200;
             border-radius: 4px;
@@ -399,8 +457,8 @@ local function getHTML()
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 4px;
-            padding: 8px 4px;
+            gap: 3px;
+            padding: 6px 4px;
         }
 
         .winamp-btn:active {
@@ -415,7 +473,7 @@ local function getHTML()
 
         .wa-symbol {
             font-family: 'VT323', monospace;
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: 700;
             line-height: 1;
             text-shadow: 1px 1px 0 #000;
@@ -424,15 +482,15 @@ local function getHTML()
 
         .wa-label {
             font-family: 'Share Tech Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 700;
             color: #b0c0d8;
             letter-spacing: 0.5px;
         }
 
         .wa-led {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background-color: #003300;
             border: 1px solid #001100;
@@ -451,15 +509,16 @@ local function getHTML()
             text-shadow: 0 0 5px #00ff41;
         }
 
+        /* RETRO EXPANDED SCROLLING PLAYLIST MODAL */
         .retro-modal {
             position: absolute;
-            top: 25px;
+            top: 20px;
             right: 20px;
-            width: 560px;
+            width: 580px;
             background: #1e222b;
             border: 2px solid #3b4150;
-            border-radius: 12px;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.8), 0 0 20px rgba(0,255,65,0.2);
+            border-radius: 14px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.9), 0 0 25px rgba(0,255,65,0.25);
             z-index: 1000;
             display: none;
             flex-direction: column;
@@ -499,10 +558,25 @@ local function getHTML()
             padding: 10px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            max-height: 360px;
+            gap: 6px;
+            max-height: 440px;
             overflow-y: auto;
             font-family: 'VT323', monospace;
+            scrollbar-width: thin;
+            scrollbar-color: #00ff41 #000000;
+        }
+
+        .modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .modal-body::-webkit-scrollbar-track {
+            background: #000;
+            border: 1px inset #222;
+        }
+        .modal-body::-webkit-scrollbar-thumb {
+            background: #00ff41;
+            border-radius: 4px;
+            box-shadow: 0 0 6px #00ff41;
         }
 
         .modal-now-playing {
@@ -533,6 +607,21 @@ local function getHTML()
             box-shadow: 0 0 8px rgba(0,255,65,0.4);
             transform: translateX(4px);
         }
+
+        .load-btn {
+            background: #004400;
+            color: #00ff41;
+            border: 1px solid #00ff41;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-family: 'VT323', monospace;
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+        .load-btn:active {
+            background: #00ff41;
+            color: #000;
+        }
     </style>
 </head>
 <body>
@@ -540,9 +629,10 @@ local function getHTML()
     <div class="main-deck">
         <!-- Left Column -->
         <div class="col">
-            <div class="card-box" style="flex: 0.8;">
-                <div class="section-title">🎙️ Microphone Controls</div>
-                <div class="grid grid-2col">
+            <!-- Card 1: Meeting Controls (Mic, Push to Talk, Camera Toggle) -->
+            <div class="card-box" style="flex: 0.85;">
+                <div class="section-title">🎙️ Meeting Controls</div>
+                <div class="grid grid-3col">
                     <div id="micBtn" class="tile tile-mic muted" onclick="triggerAction('mute_toggle')">
                         <span class="tile-icon">🎙️</span>
                         <span id="micLabel" class="tile-label">MIC MUTED</span>
@@ -551,15 +641,20 @@ local function getHTML()
                         <span class="tile-icon">🗣️</span>
                         <span class="tile-label">Push to Talk</span>
                     </div>
+                    <div class="tile" onclick="triggerAction('cam_toggle')">
+                        <span class="tile-icon">📹</span>
+                        <span class="tile-label">Camera Toggle</span>
+                    </div>
                 </div>
             </div>
 
+            <!-- Card 2: Synchronized Audio & Mic Device Controls -->
             <div class="card-box" style="flex: 1.1;">
-                <div class="section-title">🔊 macOS Master Audio</div>
+                <div class="section-title">🎧 macOS Audio & Mic Devices</div>
                 <div class="grid grid-2col">
                     <div class="tile" onclick="triggerAction('audio_cycle')">
                         <span class="tile-icon">🎧</span>
-                        <span id="outputDevLabel" class="tile-label">Switch Output</span>
+                        <span id="outputDevLabel" class="tile-label">Switch Audio & Mic</span>
                     </div>
                     <div id="sysMuteBtn" class="tile tile-sound" onclick="triggerAction('audio_mute')">
                         <span class="tile-icon">🔇</span>
@@ -597,7 +692,7 @@ local function getHTML()
                 <!-- Titlebar: Click for Playlist Presets -->
                 <div class="winamp-titlebar" onclick="togglePlaylistModal()">
                     <span>*** GEEKAMP v6.78 ***</span>
-                    <span>[PLAYLIST]</span>
+                    <span>[PLAYLISTS]</span>
                 </div>
 
                 <div class="winamp-screen">
@@ -688,52 +783,79 @@ local function getHTML()
                         <span class="tile-icon">🦊</span>
                         <span class="tile-label">Firefox</span>
                     </div>
-                    <div class="tile" onclick="triggerAction('window_split')">
-                        <span class="tile-icon">⚖️</span>
-                        <span class="tile-label">50/50 Split</span>
+                    <div class="tile" onclick="triggerAction('window_next_screen')">
+                        <span class="tile-icon">🖥️</span>
+                        <span class="tile-label">Next Display</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL 1: GEEKAMP PLAYLIST PRESETS (Triggered by Titlebar Click) -->
+    <!-- MODAL 1: GEEKAMP PLAYLIST PRESETS (Clint's Custom Playlists) -->
     <div id="playlistModal" class="retro-modal">
         <div class="modal-header">
             <span>*** GEEKAMP PLAYLIST PRESETS ***</span>
             <span class="modal-close" onclick="togglePlaylistModal()">[X]</span>
         </div>
         <div class="modal-body">
-            <div class="modal-now-playing">CHOOSE A SPOTIFY PLAYLIST:</div>
-            <div class="modal-item" onclick="playUri('spotify:playlist:37i9dQZF1DX8Ueb1gM3p1r')">
-                <span>01. 🎧 Deep Work / Lofi Beats</span>
-                <span>[LOAD]</span>
+            <div class="modal-now-playing">CLINT'S SPOTIFY PLAYLISTS:</div>
+            <div class="modal-item" onclick="playUri('spotify:track:1DCdIWCE5UFiObCsTSpKFv', 'spotify:playlist:0NyPLheWZbkk2wgwq7NIC8')">
+                <span>01. 🌧️ Rust and Rain</span>
+                <button class="load-btn" onclick="playUri('spotify:track:1DCdIWCE5UFiObCsTSpKFv', 'spotify:playlist:0NyPLheWZbkk2wgwq7NIC8'); event.stopPropagation();">[LOAD]</button>
             </div>
-            <div class="modal-item" onclick="playUri('spotify:playlist:37i9dQZF1DX10zPhmP7SuP')">
-                <span>02. ⚡ High Energy / Electronic & Rock</span>
-                <span>[LOAD]</span>
+            <div class="modal-item" onclick="playUri('spotify:track:7zaZlzl0XhthNwH3GQcyZ0', 'spotify:playlist:7Eldq78AevyJ8vSnbGpu9d')">
+                <span>02. ⛰️ Peak</span>
+                <button class="load-btn" onclick="playUri('spotify:track:7zaZlzl0XhthNwH3GQcyZ0', 'spotify:playlist:7Eldq78AevyJ8vSnbGpu9d'); event.stopPropagation();">[LOAD]</button>
             </div>
-            <div class="modal-item" onclick="playUri('spotify:playlist:37i9dQZF1DX4WYpdE2TsF6')">
-                <span>03. ☕ Chill Out / Jazz Beats</span>
-                <span>[LOAD]</span>
+            <div class="modal-item" onclick="playUri('spotify:track:5vYA1mW9g2Coh1HUFUSmlb', 'spotify:playlist:6PP4LnUwxEYitIC9Z0dOv1')">
+                <span>03. 🚗 Windows Down Crusin'</span>
+                <button class="load-btn" onclick="playUri('spotify:track:5vYA1mW9g2Coh1HUFUSmlb', 'spotify:playlist:6PP4LnUwxEYitIC9Z0dOv1'); event.stopPropagation();">[LOAD]</button>
             </div>
-            <div class="modal-item" onclick="playUri('spotify:user:spotify:collection')">
-                <span>04. ❤️ Your Liked Songs</span>
-                <span>[LOAD]</span>
+            <div class="modal-item" onclick="playUri('spotify:track:5eewTcv33R0w9DmyJU9R1W', 'spotify:playlist:37i9dQZF1DX2TRYkJECvfC')">
+                <span>04. ☕ Deep House Relax</span>
+                <button class="load-btn" onclick="playUri('spotify:track:5eewTcv33R0w9DmyJU9R1W', 'spotify:playlist:37i9dQZF1DX2TRYkJECvfC'); event.stopPropagation();">[LOAD]</button>
+            </div>
+            <div class="modal-item" onclick="playUri('spotify:track:3ckd4YA4LcD3j50rfIVwUe', 'spotify:playlist:0BsPYkpv2PWHCNiYzn2eTa')">
+                <span>05. ⚡ Anger Management 101</span>
+                <button class="load-btn" onclick="playUri('spotify:track:3ckd4YA4LcD3j50rfIVwUe', 'spotify:playlist:0BsPYkpv2PWHCNiYzn2eTa'); event.stopPropagation();">[LOAD]</button>
+            </div>
+            <div class="modal-item" onclick="playUri('', 'spotify:user:spotify:collection')">
+                <span>06. ❤️ Your Liked Songs</span>
+                <button class="load-btn" onclick="playUri('', 'spotify:user:spotify:collection'); event.stopPropagation();">[LOAD]</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Register Service Worker for Android PWA Installability
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+
+        // Auto Request Fullscreen on First Touch / Click
+        function goFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                const el = document.documentElement;
+                if (el.requestFullscreen) {
+                    el.requestFullscreen().catch(() => {});
+                } else if (el.webkitRequestFullscreen) {
+                    el.webkitRequestFullscreen().catch(() => {});
+                }
+            }
+        }
+        document.addEventListener('touchstart', goFullscreen, { once: true });
+        document.addEventListener('click', goFullscreen, { once: true });
+
         function triggerAction(action) {
             fetch('/api/action/' + action, { method: 'POST' });
             setTimeout(updateStatus, 150);
         }
 
-        function playUri(uri) {
-            fetch('/api/action/play_uri?uri=' + encodeURIComponent(uri), { method: 'POST' });
+        function playUri(trackUri, contextUri) {
+            fetch('/api/action/play_uri?track=' + encodeURIComponent(trackUri) + '&context=' + encodeURIComponent(contextUri), { method: 'POST' });
             togglePlaylistModal();
-            setTimeout(updateStatus, 300);
+            setTimeout(updateStatus, 500);
         }
 
         function togglePlaylistModal() {
@@ -841,7 +963,9 @@ local function getHTML()
                     }
 
                     if (data.audio) {
-                        document.getElementById('outputDevLabel').innerText = data.audio.name || 'Switch Output';
+                        const outLabel = data.audio.name ? (data.audio.name + (data.audio.inputName ? ' & ' + data.audio.inputName : '')) : 'Switch Audio & Mic';
+                        document.getElementById('outputDevLabel').innerText = data.audio.name || 'Switch Audio & Mic';
+                        
                         const sysMuteBtn = document.getElementById('sysMuteBtn');
                         const sysMuteLabel = document.getElementById('sysMuteLabel');
                         if (data.audio.isMuted) {
@@ -886,89 +1010,120 @@ local function getHTML()
 </html>]]
 end
 
+local function handleRequest(method, path, headers, body)
+    if method == "OPTIONS" then
+        return "", 200, corsHeaders()
+    end
+
+    if path == "/manifest.json" then
+        return getManifestJSON()
+    elseif path == "/sw.js" then
+        return getServiceWorkerJS()
+    elseif path == "/icon.svg" then
+        return getIconSVG()
+    elseif path == "/api/status" then
+        local data = {
+            micMuted = mute.isMuted(),
+            audio = audio.getStatus(),
+            spotify = spotify.getStatus()
+        }
+        return jsonResponse(data)
+    elseif path:find("/api/action/play_uri") then
+        local track = path:match("track=([^&]+)")
+        local context = path:match("context=([^&]+)")
+        if track or context then
+            track = track and hs.http.urlPartDecode(track) or ""
+            context = context and hs.http.urlPartDecode(context) or ""
+            hs.timer.doAfter(0, function()
+                spotify.playURI(track, context)
+            end)
+        end
+        return jsonResponse({status = "ok"})
+    elseif path:sub(1, 12) == "/api/action/" then
+        local action = path:sub(13)
+
+        if action == "mute_toggle" then
+            hs.timer.doAfter(0, mute.toggleMute)
+        elseif action == "talk_start" then
+            hs.timer.doAfter(0, mute.startTalk)
+        elseif action == "talk_stop" then
+            hs.timer.doAfter(0, mute.stopTalk)
+        elseif action == "cam_toggle" then
+            hs.timer.doAfter(0, meeting.toggleCamera)
+        elseif action == "audio_cycle" then
+            hs.timer.doAfter(0, audio.cycleOutput)
+        elseif action == "audio_mute" then
+            hs.timer.doAfter(0, audio.toggleMute)
+        elseif action == "audio_volup" then
+            hs.timer.doAfter(0, audio.volumeUp)
+        elseif action == "audio_voldown" then
+            hs.timer.doAfter(0, audio.volumeDown)
+        elseif action == "snap_copy" then
+            hs.timer.doAfter(0, screenshot.copyToClipboard)
+        elseif action == "snap_file" then
+            hs.timer.doAfter(0, screenshot.saveToFile)
+        elseif action == "app_chrome" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("chrome") end)
+        elseif action == "app_messages" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("messages") end)
+        elseif action == "app_chatgpt" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("chatgpt") end)
+        elseif action == "app_teams" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("teams") end)
+        elseif action == "app_slack" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("slack") end)
+        elseif action == "app_outlook" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("outlook") end)
+        elseif action == "app_firefox" then
+            hs.timer.doAfter(0, function() apps.smartLaunch("firefox") end)
+        elseif action == "spotify_playpause" then
+            hs.timer.doAfter(0, spotify.playPause)
+        elseif action == "spotify_next" then
+            hs.timer.doAfter(0, spotify.nextTrack)
+        elseif action == "spotify_prev" then
+            hs.timer.doAfter(0, spotify.previousTrack)
+        elseif action == "spotify_shuffle" then
+            hs.timer.doAfter(0, spotify.toggleShuffle)
+        elseif action == "spotify_repeat" then
+            hs.timer.doAfter(0, spotify.toggleRepeat)
+        elseif action == "spotify_like" then
+            hs.timer.doAfter(0, spotify.likeCurrentTrack)
+        elseif action == "window_next_screen" then
+            hs.timer.doAfter(0, winManager.moveToNextScreen)
+        elseif action == "window_split" then
+            hs.timer.doAfter(0, winManager.split5050)
+        end
+
+        return jsonResponse({status = "ok"})
+    end
+
+    return getHTML(), 200, corsHeaders("text/html; charset=utf-8")
+end
+
 function server.start()
     if httpServer then httpServer:stop() end
+    if httpsServer then httpsServer:stop() end
 
+    -- Start HTTP Server on 8080
     httpServer = hs.httpserver.new(false, true)
     httpServer:setName("Hammerspoon Stream Deck")
     httpServer:setPort(port)
-    httpServer:setCallback(function(method, path, headers, body)
-        if method == "OPTIONS" then
-            return "", 200, corsHeaders()
-        end
-
-        if path == "/api/status" then
-            local data = {
-                micMuted = mute.isMuted(),
-                audio = audio.getStatus(),
-                spotify = spotify.getStatus()
-            }
-            return jsonResponse(data)
-        elseif path:sub(1, 12) == "/api/action/" then
-            local action = path:sub(13)
-
-            if action == "mute_toggle" then
-                mute.toggleMute()
-            elseif action == "talk_start" then
-                mute.startTalk()
-            elseif action == "talk_stop" then
-                mute.stopTalk()
-            elseif action == "audio_cycle" then
-                audio.cycleOutput()
-            elseif action == "audio_mute" then
-                audio.toggleMute()
-            elseif action == "audio_volup" then
-                audio.volumeUp()
-            elseif action == "audio_voldown" then
-                audio.volumeDown()
-            elseif action == "snap_copy" then
-                screenshot.copyToClipboard()
-            elseif action == "snap_file" then
-                screenshot.saveToFile()
-            elseif action == "app_chrome" then
-                apps.smartLaunch("chrome")
-            elseif action == "app_messages" then
-                apps.smartLaunch("messages")
-            elseif action == "app_chatgpt" then
-                apps.smartLaunch("chatgpt")
-            elseif action == "app_teams" then
-                apps.smartLaunch("teams")
-            elseif action == "app_slack" then
-                apps.smartLaunch("slack")
-            elseif action == "app_outlook" then
-                apps.smartLaunch("outlook")
-            elseif action == "app_firefox" then
-                apps.smartLaunch("firefox")
-            elseif action == "spotify_playpause" then
-                spotify.playPause()
-            elseif action == "spotify_next" then
-                spotify.nextTrack()
-            elseif action == "spotify_prev" then
-                spotify.previousTrack()
-            elseif action == "spotify_shuffle" then
-                spotify.toggleShuffle()
-            elseif action == "spotify_repeat" then
-                spotify.toggleRepeat()
-            elseif action == "spotify_like" then
-                spotify.likeCurrentTrack()
-            elseif action:sub(1, 8) == "play_uri" then
-                local uri = path:match("uri=([^&]+)")
-                if uri then
-                    uri = hs.http.urlPartDecode(uri)
-                    spotify.playURI(uri)
-                end
-            elseif action == "window_split" then
-                winManager.split5050()
-            end
-
-            return jsonResponse({status = "ok"})
-        end
-
-        return getHTML(), 200, corsHeaders("text/html; charset=utf-8")
-    end)
-
+    httpServer:setCallback(handleRequest)
     httpServer:start()
     print("Stream Deck HTTP Server running on port " .. port)
+
+    -- Start HTTPS Server on 8443 with self-signed certificate
+    local ok, err = pcall(function()
+        httpsServer = hs.httpserver.new(true, true)
+        httpsServer:setName("Hammerspoon Stream Deck HTTPS")
+        httpsServer:setPort(httpsPort)
+        httpsServer:setCallback(handleRequest)
+        httpsServer:start()
+        print("Stream Deck HTTPS Server running on port " .. httpsPort)
+    end)
+    if not ok then
+        print("HTTPS Server note:", err)
+    end
 end
 
 return server

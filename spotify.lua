@@ -80,9 +80,14 @@ function spotify.likeCurrentTrack()
     hs.applescript(script)
 end
 
-function spotify.playURI(uri)
-    if not ensureSpotifyRunning() then return end
-    hs.urlevent.openURL(uri)
+function spotify.playURI(uri, contextUri)
+    local script
+    if contextUri and contextUri ~= "" then
+        script = string.format('tell application "Spotify" to play track "%s" in context "%s"', uri, contextUri)
+    else
+        script = string.format('tell application "Spotify" to play track "%s"', uri)
+    end
+    hs.task.new("/usr/bin/osascript", nil, {"-e", script}):start()
 end
 
 function spotify.getStatus()
