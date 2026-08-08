@@ -25,6 +25,7 @@ local winManager = require("window")
 local browser = require("browser")
 local audio = require("audio")
 local screenshot = require("screenshot")
+local record = require("record")
 local apps = require("apps")
 local server = require("server")
 

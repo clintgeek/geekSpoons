@@ -8,6 +8,7 @@ local winManager = require("window")
 local browser = require("browser")
 local audio = require("audio")
 local screenshot = require("screenshot")
+local record = require("record")
 local apps = require("apps")
 
 local httpServer = nil
@@ -2288,6 +2289,18 @@ local function handleRequest(method, path, headers, body)
             hs.timer.doAfter(0, screenshot.copyToClipboard)
         elseif action == "snap_file" then
             hs.timer.doAfter(0, screenshot.saveToFile)
+        elseif action == "snap_selection" then
+            hs.timer.doAfter(0, screenshot.selection)
+        elseif action == "snap_window" then
+            hs.timer.doAfter(0, screenshot.window)
+        elseif action == "snap_fullscreen" then
+            hs.timer.doAfter(0, screenshot.fullscreen)
+        elseif action == "record_area" then
+            hs.timer.doAfter(0, record.area)
+        elseif action == "record_window" then
+            hs.timer.doAfter(0, record.window)
+        elseif action == "record_fullscreen" then
+            hs.timer.doAfter(0, record.fullscreen)
         elseif action == "app_chrome" then
             hs.timer.doAfter(0, function() apps.smartLaunch("chrome") end)
         elseif action == "app_messages" then

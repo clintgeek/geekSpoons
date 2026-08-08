@@ -12,24 +12,25 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="apple-touch-icon" href="/icon.svg">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
     <title>Hammerspoon Workstation Controller</title>
     <style>
         :root {
-            --bg-primary: #080D13;
-            --bg-darkest: #070B10;
-            --panel-bg: #101722;
-            --panel-secondary: #151C28;
-            --elevated: #19212E;
-            --inset: #080D12;
-            --border: #293544;
-            --border-highlight: #344253;
-            --text-primary: #D8DEE7;
-            --text-secondary: #8492A6;
-            --text-muted: #5C6B7E;
+            --bg-primary: #05070A;
+            --bg-darkest: #020305;
+            --panel-bg: #080B10;
+            --panel-secondary: #0C1016;
+            --elevated: #11151C;
+            --inset: #05070A;
+            --border: #181E27;
+            --border-highlight: #262E3A;
+            --text-primary: #E4E9F0;
+            --text-secondary: #7A8BA3;
+            --text-muted: #4F5C6E;
             --amber: #D6A73A;
             --amber-bright: #E5B84B;
             --green: #18D866;
-            --green-dark: #063A25;
+            --green-dark: #053D25;
             --spotify-green: #1ED760;
             --red: #E5484D;
 
@@ -68,6 +69,11 @@
         .mono {
             font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
             letter-spacing: 0.02em;
+        }
+
+        i.ph-bold {
+            font-style: normal;
+            line-height: 1;
         }
 
         /* --- TITLE BAR --- */
@@ -358,13 +364,11 @@
         .meeting-icon {
             width: 32px;
             height: 32px;
+            font-size: 32px;
             color: var(--text-secondary);
-        }
-
-        .meeting-icon svg {
-            width: 100%;
-            height: 100%;
-            fill: currentColor;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .meeting-label {
@@ -422,16 +426,11 @@
         .audio-icon {
             width: 28px;
             height: 28px;
+            font-size: 28px;
             color: var(--text-secondary);
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-
-        .audio-icon svg {
-            width: 100%;
-            height: 100%;
-            fill: currentColor;
         }
 
         .audio-label {
@@ -456,65 +455,83 @@
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             flex: 1;
+            align-items: stretch;
+        }
+
+        .capture-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1.25fr 1fr;
+            gap: 8px;
+            min-width: 0;
         }
 
         .capture-control {
-            background: linear-gradient(to bottom, #1A2330, #151C28);
+            background: linear-gradient(to bottom, #121821, #0D1219);
             border: 1px solid var(--border);
             border-radius: var(--radius-control);
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
+            align-items: center;
             justify-content: center;
             gap: 6px;
             cursor: pointer;
-            padding: 14px;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,0.2);
+            padding: 10px 6px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 6px rgba(0,0,0,0.2);
             transition: all 0.12s ease;
+            min-height: 0;
+        }
+
+        .capture-section .capture-control:first-child {
+            grid-column: 1 / -1;
         }
 
         .capture-control:hover {
             border-color: var(--border-highlight);
-            background: linear-gradient(to bottom, #202B3A, #19212E);
+            background: linear-gradient(to bottom, #192130, #121A24);
         }
 
         .capture-control:active {
             transform: translateY(1px);
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
-            background: #0F161F;
+            background: #080C10;
         }
 
         .capture-icon {
             width: 22px;
             height: 22px;
+            font-size: 22px;
             color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .capture-control.record .capture-icon {
+            color: var(--red);
         }
 
         .capture-primary {
-            font-size: 13px;
+            font-size: 9px;
             font-weight: 700;
-            color: var(--text-primary);
-            letter-spacing: 0.05em;
-        }
-
-        .capture-secondary {
-            font-size: 10px;
             color: var(--text-secondary);
-            letter-spacing: 0.06em;
+            letter-spacing: 0.03em;
+            text-align: center;
+            line-height: 1.2;
         }
 
         /* --- SPOTIFY PANEL --- */
         .spotify-panel {
-            background: linear-gradient(180deg, #0A0F12 0%, #0C1318 100%);
-            border: 1px solid #1A2D25;
+            background: linear-gradient(180deg, #05080A 0%, #080C10 100%);
+            border: 1px solid #14211B;
             border-radius: var(--radius-panel);
-            padding: 12px 14px 6px 14px;
+            padding: 16px 18px 14px 18px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
             flex: 0 0 auto;
-            min-height: 0;
-            box-shadow: inset 0 1px 0 rgba(30,215,96,0.04), 0 6px 18px rgba(0,0,0,0.35);
+            min-height: 320px;
+            box-shadow: inset 0 1px 0 rgba(30,215,96,0.04), 0 6px 18px rgba(0,0,0,0.45);
             position: relative;
             overflow: hidden;
         }
@@ -522,8 +539,21 @@
         .spotify-panel::before {
             content: '';
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(circle at 20% 20%, rgba(30,215,96,0.05) 0%, transparent 50%);
+            inset: 0;
+            background-image: linear-gradient(90deg, rgba(3,7,9,0.86) 0%, rgba(3,7,9,0.64) 42%, rgba(3,7,9,0.46) 100%), var(--album-art, none);
+            background-position: center;
+            background-size: cover;
+            filter: saturate(0.85);
+            opacity: 0.88;
+            pointer-events: none;
+            transition: opacity 0.35s ease, background-image 0.35s ease;
+        }
+
+        .spotify-panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.24));
             pointer-events: none;
         }
 
@@ -577,18 +607,27 @@
 
         .now-playing {
             display: flex;
-            gap: 16px;
+            gap: 20px;
             position: relative;
             z-index: 1;
+            cursor: pointer;
+            border-radius: var(--radius-control);
+            padding: 8px;
+            margin: -8px;
+            align-items: center;
+        }
+
+        .now-playing:hover {
+            background: rgba(255,255,255,0.03);
         }
 
         .track-info {
-            flex: 1;
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
             min-width: 0;
+            padding: 4px 0;
         }
 
         .now-playing-label {
@@ -602,7 +641,7 @@
         }
 
         .track-name {
-            font-size: 32px;
+            font-size: 36px;
             font-weight: 800;
             color: var(--text-primary);
             letter-spacing: -0.01em;
@@ -613,7 +652,7 @@
         }
 
         .artist-name {
-            font-size: 20px;
+            font-size: 24px;
             font-weight: 700;
             color: var(--amber);
             letter-spacing: 0.02em;
@@ -623,21 +662,11 @@
         }
 
         .album-name {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        .track-meta {
-            display: flex;
-            gap: 12px;
-            font-family: 'SF Mono', Menlo, Consolas, monospace;
-            font-size: 10px;
-            color: var(--text-muted);
-            letter-spacing: 0.05em;
-            margin-top: 4px;
         }
 
         .tech-meta {
@@ -646,25 +675,6 @@
             color: var(--text-muted);
             letter-spacing: 0.05em;
             margin-top: 2px;
-        }
-
-        /* --- VISUALIZER --- */
-        .visualizer-wrap {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            height: 46px;
-            background: var(--inset);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            overflow: hidden;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
-        }
-
-        #vizCanvas {
-            width: 100%;
-            height: 100%;
-            display: block;
         }
 
         /* --- PROGRESS --- */
@@ -758,10 +768,9 @@
             border-color: var(--spotify-green);
         }
 
-        .pb-btn svg {
-            width: 18px;
-            height: 18px;
-            fill: currentColor;
+        .pb-btn i.ph-bold {
+            font-size: 18px;
+            line-height: 1;
         }
 
         .pb-play {
@@ -774,9 +783,9 @@
             box-shadow: 0 0 12px rgba(30,215,96,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
         }
 
-        .pb-play svg {
-            width: 28px;
-            height: 28px;
+        .pb-play i.ph-bold {
+            font-size: 28px;
+            line-height: 1;
         }
 
         .pb-like {
@@ -865,8 +874,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
-            font-weight: 800;
+            font-size: 22px;
             color: #fff;
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
@@ -921,10 +929,110 @@
             100% { transform: translateX(-50%); }
         }
 
+        /* --- PLAYLIST MODAL --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 24px;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            width: 100%;
+            max-width: 460px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-panel);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.06em;
+        }
+
+        .modal-close {
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 4px;
+        }
+
+        .modal-close:hover { color: var(--text-primary); }
+
+        .modal-body {
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .modal-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: var(--panel-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            cursor: pointer;
+            transition: all 0.12s ease;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .modal-item:hover {
+            border-color: var(--border-highlight);
+            background: var(--elevated);
+        }
+
+        .modal-item:active {
+            transform: translateY(1px);
+            background: var(--inset);
+        }
+
+        .modal-load {
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: var(--green-dark);
+            color: var(--green);
+            border: 1px solid var(--green);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            margin-left: 12px;
+        }
+
+        .modal-load:hover {
+            background: var(--green);
+            color: var(--bg-primary);
+        }
+
         /* Responsive height for meeting controls */
         @media (max-height: 800px) {
-            .track-name { font-size: 24px; }
-            .artist-name { font-size: 18px; }
+            .track-name { font-size: 28px; }
+            .artist-name { font-size: 20px; }
+            .album-name { font-size: 14px; }
         }
     </style>
 </head>
@@ -937,15 +1045,15 @@
             <div class="panel flex-1">
                 <div class="meeting-grid">
                     <div class="meeting-control live" id="micBtn" onclick="triggerAction('mute_toggle')">
-                        <div class="meeting-icon"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></div>
+                        <div class="meeting-icon"><i class="ph-bold ph-microphone"></i></div>
                         <div class="meeting-label" id="micLabel">MIC LIVE</div>
                     </div>
                     <div class="meeting-control" id="talkBtn">
-                        <div class="meeting-icon"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></div>
+                        <div class="meeting-icon"><i class="ph-bold ph-hand-tap"></i></div>
                         <div class="meeting-label">PUSH TO TALK</div>
                     </div>
                     <div class="meeting-control" id="camBtn" onclick="triggerAction('cam_toggle')">
-                        <div class="meeting-icon"><svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg></div>
+                        <div class="meeting-icon"><i class="ph-bold ph-video-camera"></i></div>
                         <div class="meeting-label" id="camLabel">CAMERA</div>
                     </div>
                 </div>
@@ -955,27 +1063,19 @@
             <div class="panel flex-1">
                 <div class="audio-grid">
                     <div class="audio-field" id="audioOutputBtn" onclick="triggerAction('audio_cycle')">
-                        <div class="audio-icon">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
-                        </div>
+                        <div class="audio-icon"><i class="ph-bold ph-speaker-hifi"></i></div>
                         <div class="audio-label" id="audioOutputName">Unknown Output</div>
                     </div>
                     <div class="audio-field" id="audioMuteBtn" onclick="triggerAction('audio_mute')">
-                        <div class="audio-icon">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.53l2.25 2.25c.22-.66.25-1.38.25-1.75zM19 12c0 .99-.2 1.93-.56 2.79l1.46 1.46C20.88 15.21 21 13.64 21 12c0-3.53-2.61-6.43-6-6.92V2.05c4.49.5 8 4.31 8 8.95zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.4-.32 2.66-.91 3.74-1.74L19.73 21 21 19.73 4.27 3zM12 6.73l2.92 2.92-2.92-2.92V6.73zM12 17.27L9.91 15.18 12 13.09v4.18z"/></svg>
-                        </div>
+                        <div class="audio-icon"><i class="ph-bold ph-speaker-slash"></i></div>
                         <div class="audio-label" id="audioMuteLabel">Mute Sound</div>
                     </div>
                     <div class="audio-field" onclick="triggerAction('audio_voldown')">
-                        <div class="audio-icon">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 12h2z"/><path d="M18 7h-2v10h2V7z"/></svg>
-                        </div>
+                        <div class="audio-icon"><i class="ph-bold ph-speaker-low"></i></div>
                         <div class="audio-label">Vol -</div>
                     </div>
                     <div class="audio-field" onclick="triggerAction('audio_volup')">
-                        <div class="audio-icon">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 12h2z"/><path d="M18 7h-2v4h-4v2h4v4h2v-4h4v-2h-4V7z"/></svg>
-                        </div>
+                        <div class="audio-icon"><i class="ph-bold ph-speaker-high"></i></div>
                         <div class="audio-label">Vol +</div>
                     </div>
                 </div>
@@ -984,19 +1084,33 @@
             <!-- SCREEN CAPTURE -->
             <div class="panel flex-1">
                 <div class="capture-grid">
-                    <div class="capture-control" onclick="triggerAction('snap_copy')">
-                        <div class="capture-icon">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" fill="none" stroke-width="2"/><path d="M9 9h6v6H9z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M15 9l3-3M9 15l-3 3" stroke="currentColor" stroke-width="1.5"/></svg>
+                    <div class="capture-section">
+                        <div class="capture-control" onclick="triggerAction('snap_selection')">
+                            <div class="capture-icon"><i class="ph-bold ph-crop"></i></div>
+                            <div class="capture-primary">Screenshot Selection</div>
                         </div>
-                        <div class="capture-primary">RECTANGLE → CLIPBOARD</div>
-                        <div class="capture-secondary">CAPTURE AREA</div>
+                        <div class="capture-control" onclick="triggerAction('snap_window')">
+                            <div class="capture-icon"><i class="ph-bold ph-app-window"></i></div>
+                            <div class="capture-primary">Screenshot Window</div>
+                        </div>
+                        <div class="capture-control" onclick="triggerAction('snap_fullscreen')">
+                            <div class="capture-icon"><i class="ph-bold ph-monitor"></i></div>
+                            <div class="capture-primary">Screenshot Fullscreen</div>
+                        </div>
                     </div>
-                    <div class="capture-control" onclick="triggerAction('snap_file')">
-                        <div class="capture-icon">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" fill="none" stroke-width="2"/><path d="M9 9h6v6H9z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M15 9l3-3M9 15l-3 3" stroke="currentColor" stroke-width="1.5"/></svg>
+                    <div class="capture-section">
+                        <div class="capture-control record" onclick="triggerAction('record_area')">
+                            <div class="capture-icon"><i class="ph-bold ph-record"></i></div>
+                            <div class="capture-primary">Record Area</div>
                         </div>
-                        <div class="capture-primary">RECTANGLE → FILE</div>
-                        <div class="capture-secondary">SAVE TO DISK</div>
+                        <div class="capture-control record" onclick="triggerAction('record_window')">
+                            <div class="capture-icon"><i class="ph-bold ph-app-window"></i></div>
+                            <div class="capture-primary">Record Window</div>
+                        </div>
+                        <div class="capture-control record" onclick="triggerAction('record_fullscreen')">
+                            <div class="capture-icon"><i class="ph-bold ph-monitor"></i></div>
+                            <div class="capture-primary">Record Fullscreen</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1009,30 +1123,20 @@
                 <div class="spotify-header">
                     <div class="spotify-title">
                         <span class="spotify-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--spotify-green)"/><path d="M17.9 10.9C14.7 8 9.35 8.8 6.97 11.2c-.2.2-.2.5 0 .7l.6.6c.2.2.5.2.7 0 1.9-1.8 5.9-2.4 8.5-.5.3.2.6.1.8-.2l.4-.6c.2-.3 0-.7-.4-.9zm-1.8 2.2c-2.4-2-6.3-1.2-8.2.8-.2.2-.2.5 0 .7l.5.5c.2.2.5.2.7 0 1.3-1.2 4.1-1.8 6.2-.4.3.2.6.1.8-.2l.4-.5c.2-.3.1-.6-.2-.8z" fill="#0A0F12"/></svg></span>
-                        Spotify Media Controller
+                        NOW PLAYING
                     </div>
                     <div class="spotify-status" id="spConnection"><span class="status-dot"></span> SPOTIFY CONNECTED</div>
                 </div>
 
-                <div class="now-playing">
+                <div class="now-playing" onclick="togglePlaylistModal()" title="Open playlist chooser">
                     <div class="track-info">
-                        <div class="now-playing-label"><span class="status-dot"></span> NOW PLAYING</div>
                         <div class="track-name marquee-container">
                             <div class="marquee-content" id="trackName">Plush (Acoustic)</div>
                         </div>
                         <div class="artist-name" id="artistName">Stone Temple Pilots</div>
                         <div class="album-name" id="albumName">Thank You (20th Anniversary Super Deluxe)</div>
-                        <div class="track-meta">
-                            <span>ACOUSTIC</span>
-                            <span>ROCK</span>
-                            <span>1994</span>
-                        </div>
                         <div class="tech-meta" id="techMeta">320 kbps • 44.1 kHz</div>
                     </div>
-                </div>
-
-                <div class="visualizer-wrap">
-                    <canvas id="vizCanvas"></canvas>
                 </div>
 
                 <div class="progress-wrap">
@@ -1047,23 +1151,23 @@
 
                 <div class="playback-controls">
                     <button class="pb-btn" id="repBtn" onclick="triggerAction('spotify_repeat')">
-                        <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                        <i class="ph-bold ph-repeat"></i>
                     </button>
                     <button class="pb-btn" id="shufBtn" onclick="triggerAction('spotify_shuffle')">
-                        <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.53 2.53L19.29 4l.71.71-2.53 2.53L23 10.49 22.29 11.2 18.82 7.73l-3.96 3.96L11.4 8.23l3.96-3.96-2.53-2.53.71-.71 2.53 2.53.71-.71zM10.59 14.83l-5.17 5.17L4 19.41 9.17 14.24l1.42 1.59zM14.5 20l-2.53-2.53L11.26 20l-.71-.71 2.53-2.53-.71-.71 3.47-3.47 1.42 1.41-3.47 3.47 2.53 2.53-.71.71-2.53-2.53L13.79 20h.71z"/></svg>
+                        <i class="ph-bold ph-shuffle"></i>
                     </button>
                     <button class="pb-btn" onclick="triggerAction('spotify_prev')">
-                        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z"/></svg>
+                        <i class="ph-bold ph-skip-back"></i>
                     </button>
                     <button class="pb-btn pb-play" id="playPauseBtn" onclick="triggerAction('spotify_playpause')">
-                        <svg id="playIcon" viewBox="0 0 24 24" style="display: none;"><path d="M8 5v14l11-7z"/></svg>
-                        <svg id="pauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        <i class="ph-bold ph-play" id="playIcon" style="display: none;"></i>
+                        <i class="ph-bold ph-pause" id="pauseIcon"></i>
                     </button>
                     <button class="pb-btn" onclick="triggerAction('spotify_next')">
-                        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                        <i class="ph-bold ph-skip-forward"></i>
                     </button>
                     <button class="pb-btn pb-like" id="likeBtn" onclick="triggerAction('spotify_like')">
-                        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        <i class="ph-bold ph-heart"></i>
                     </button>
                     <button class="pb-btn open-spotify" id="openSpotify" onclick="triggerAction('spotify_open')" title="Open Spotify">
                         <svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--spotify-green)"/><path d="M17.9 10.9C14.7 8 9.35 8.8 6.97 11.2c-.2.2-.2.5 0 .7l.6.6c.2.2.5.2.7 0 1.9-1.8 5.9-2.4 8.5-.5.3.2.6.1.8-.2l.4-.6c.2-.3 0-.7-.4-.9zm-1.8 2.2c-2.4-2-6.3-1.2-8.2.8-.2.2-.2.5 0 .7l.5.5c.2.2.5.2.7 0 1.3-1.2 4.1-1.8 6.2-.4.3.2.6.1.8-.2l.4-.5c.2-.3.1-.6-.2-.8z" fill="#0A0F12"/></svg>
@@ -1071,39 +1175,38 @@
                 </div>
             </div>
 
-            <!-- WORKSPACE APPLICATIONS -->
             <div class="panel" style="flex: 1;">
                 <div class="apps-grid">
                     <div class="app-launcher" onclick="triggerAction('app_chrome')">
-                        <div class="app-icon-lg app-chrome">C</div>
+                        <div class="app-icon-lg app-chrome"><i class="ph-bold ph-browsers"></i></div>
                         <div class="app-name">Chrome</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('app_messages')">
-                        <div class="app-icon-lg app-messages">M</div>
+                        <div class="app-icon-lg app-messages"><i class="ph-bold ph-chat-circle-text"></i></div>
                         <div class="app-name">Messages</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('app_chatgpt')">
-                        <div class="app-icon-lg app-chatgpt">C</div>
+                        <div class="app-icon-lg app-chatgpt"><i class="ph-bold ph-robot"></i></div>
                         <div class="app-name">ChatGPT</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('app_teams')">
-                        <div class="app-icon-lg app-teams">T</div>
+                        <div class="app-icon-lg app-teams"><i class="ph-bold ph-users"></i></div>
                         <div class="app-name">Teams</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('app_slack')">
-                        <div class="app-icon-lg app-slack">S</div>
+                        <div class="app-icon-lg app-slack"><i class="ph-bold ph-chat"></i></div>
                         <div class="app-name">Slack</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('app_outlook')">
-                        <div class="app-icon-lg app-outlook">O</div>
+                        <div class="app-icon-lg app-outlook"><i class="ph-bold ph-envelope"></i></div>
                         <div class="app-name">Outlook</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('app_firefox')">
-                        <div class="app-icon-lg app-firefox">F</div>
+                        <div class="app-icon-lg app-firefox"><i class="ph-bold ph-planet"></i></div>
                         <div class="app-name">Firefox</div>
                     </div>
                     <div class="app-launcher" onclick="triggerAction('window_next_screen')">
-                        <div class="app-icon-lg app-next">N</div>
+                        <div class="app-icon-lg app-next"><i class="ph-bold ph-monitor"></i></div>
                         <div class="app-name">Next Display</div>
                     </div>
                 </div>
@@ -1138,7 +1241,24 @@
             return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
         }
 
+        function updateAlbumArtwork(artist, album) {
+            const key = artist + '|' + album;
+            if (!artist || !album || key === lastArtworkKey) return;
+            lastArtworkKey = key;
+            const query = encodeURIComponent(artist + ' ' + album);
+            fetch('https://itunes.apple.com/search?term=' + query + '&entity=album&limit=1')
+                .then(r => r.json())
+                .then(result => {
+                    const artwork = result.results && result.results[0] && result.results[0].artworkUrl100;
+                    if (artwork) {
+                        document.querySelector('.spotify-panel').style.setProperty('--album-art', 'url("' + artwork.replace('100x100', '600x600') + '")');
+                    }
+                })
+                .catch(() => {});
+        }
+
         let lastTrack = '';
+        let lastArtworkKey = '';
 
         function updateMarquee(track) {
             const el = document.getElementById('trackName');
@@ -1154,63 +1274,6 @@
                 el.textContent = track + '\u00A0\u00A0\u00A0\u00A0' + track;
                 el.classList.add('marquee-scroll');
             }
-        }
-
-        // --- Visualizer ---
-        const canvas = document.getElementById('vizCanvas');
-        const ctx = canvas.getContext('2d');
-        let bars = [];
-        const barCount = 64;
-        let vizActive = false;
-        let vizRaf = null;
-
-        function resizeCanvas() {
-            canvas.width = canvas.clientWidth * window.devicePixelRatio;
-            canvas.height = canvas.clientHeight * window.devicePixelRatio;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        for (let i = 0; i < barCount; i++) {
-            bars.push({ h: 0.1, target: Math.random() });
-        }
-
-        function drawVisualizer() {
-            if (!vizActive) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                return;
-            }
-
-            const w = canvas.width;
-            const h = canvas.height;
-            const gap = 2;
-            const barW = (w - (barCount + 1) * gap) / barCount;
-
-            ctx.clearRect(0, 0, w, h);
-
-            for (let i = 0; i < barCount; i++) {
-                const b = bars[i];
-                b.h += (b.target - b.h) * 0.15;
-                if (Math.random() < 0.1) b.target = Math.random();
-
-                const barH = Math.max(2, b.h * h);
-                const x = gap + i * (barW + gap);
-                const y = h - barH;
-
-                const grad = ctx.createLinearGradient(0, h, 0, y);
-                grad.addColorStop(0, '#063A25');
-                grad.addColorStop(1, '#1ED760');
-                ctx.fillStyle = grad;
-                ctx.fillRect(x, y, barW, barH);
-            }
-
-            vizRaf = requestAnimationFrame(drawVisualizer);
-        }
-
-        function setVisualizer(active) {
-            vizActive = active;
-            if (active && !vizRaf) drawVisualizer();
-            else if (!active && vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
         }
 
         // --- Status polling ---
@@ -1259,6 +1322,7 @@
                         updateMarquee(track);
                         document.getElementById('artistName').textContent = artist;
                         document.getElementById('albumName').textContent = album;
+                        updateAlbumArtwork(artist, album);
 
                         const conn = document.getElementById('spConnection');
                         if (sp.isRunning) {
@@ -1288,11 +1352,20 @@
 
                         document.getElementById('shufBtn').classList.toggle('active', sp.shuffle);
                         document.getElementById('repBtn').classList.toggle('active', sp.repeatState);
-
-                        setVisualizer(sp.isPlaying);
                     }
                 })
                 .catch(err => console.log('Status error:', err));
+        }
+
+        // --- Playlist modal ---
+        function playUri(trackUri, contextUri) {
+            fetch('/api/action/play_uri?track=' + encodeURIComponent(trackUri) + '&context=' + encodeURIComponent(contextUri), { method: 'POST' });
+            togglePlaylistModal();
+            setTimeout(updateStatus, 500);
+        }
+
+        function togglePlaylistModal() {
+            document.getElementById('playlistModal').classList.toggle('active');
         }
 
         setInterval(updateStatus, 1000);
@@ -1303,5 +1376,40 @@
             navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
     </script>
+
+    <div id="playlistModal" class="modal-overlay" onclick="if(event.target === this) togglePlaylistModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <span>SPOTIFY PLAYLIST PRESETS</span>
+                <span class="modal-close" onclick="togglePlaylistModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="modal-item" onclick="playUri('spotify:track:1DCdIWCE5UFiObCsTSpKFv', 'spotify:playlist:0NyPLheWZbkk2wgwq7NIC8')">
+                    <span>01. Rust and Rain</span>
+                    <button class="modal-load" onclick="playUri('spotify:track:1DCdIWCE5UFiObCsTSpKFv', 'spotify:playlist:0NyPLheWZbkk2wgwq7NIC8'); event.stopPropagation();">Load</button>
+                </div>
+                <div class="modal-item" onclick="playUri('spotify:track:7zaZlzl0XhthNwH3GQcyZ0', 'spotify:playlist:7Eldq78AevyJ8vSnbGpu9d')">
+                    <span>02. Peak</span>
+                    <button class="modal-load" onclick="playUri('spotify:track:7zaZlzl0XhthNwH3GQcyZ0', 'spotify:playlist:7Eldq78AevyJ8vSnbGpu9d'); event.stopPropagation();">Load</button>
+                </div>
+                <div class="modal-item" onclick="playUri('spotify:track:5vYA1mW9g2Coh1HUFUSmlb', 'spotify:playlist:6PP4LnUwxEYitIC9Z0dOv1')">
+                    <span>03. Windows Down Crusin'</span>
+                    <button class="modal-load" onclick="playUri('spotify:track:5vYA1mW9g2Coh1HUFUSmlb', 'spotify:playlist:6PP4LnUwxEYitIC9Z0dOv1'); event.stopPropagation();">Load</button>
+                </div>
+                <div class="modal-item" onclick="playUri('spotify:track:5eewTcv33R0w9DmyJU9R1W', 'spotify:playlist:37i9dQZF1DX2TRYkJECvfC')">
+                    <span>04. Deep House Relax</span>
+                    <button class="modal-load" onclick="playUri('spotify:track:5eewTcv33R0w9DmyJU9R1W', 'spotify:playlist:37i9dQZF1DX2TRYkJECvfC'); event.stopPropagation();">Load</button>
+                </div>
+                <div class="modal-item" onclick="playUri('spotify:track:3ckd4YA4LcD3j50rfIVwUe', 'spotify:playlist:0BsPYkpv2PWHCNiYzn2eTa')">
+                    <span>05. Anger Management 101</span>
+                    <button class="modal-load" onclick="playUri('spotify:track:3ckd4YA4LcD3j50rfIVwUe', 'spotify:playlist:0BsPYkpv2PWHCNiYzn2eTa'); event.stopPropagation();">Load</button>
+                </div>
+                <div class="modal-item" onclick="playUri('', 'spotify:user:spotify:collection')">
+                    <span>06. Your Liked Songs</span>
+                    <button class="modal-load" onclick="playUri('', 'spotify:user:spotify:collection'); event.stopPropagation();">Load</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
