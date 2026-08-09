@@ -2,8 +2,8 @@
 # refresh_attention.sh: Launches node scripts in the background to refresh
 # Slack and Teams unread count cache files. Fully detaches the processes
 # so the calling shell (hs.execute) returns immediately.
-NODE_BIN="/Users/clintcrocker/.nvm/versions/node/v24.19.0/bin/node"
-SCRIPT_DIR="/Users/clintcrocker/.hammerspoon/scripts"
+NODE_BIN="${NODE_BIN_PATH:-$(which node 2>/dev/null)}"
+SCRIPT_DIR="${HAMMERSPOON_SCRIPT_DIR:-$HOME/.hammerspoon/scripts}"
 
 # Close inherited stdout/stderr pipes immediately so hs.execute (popen)
 # gets EOF and returns right away, instead of waiting for background

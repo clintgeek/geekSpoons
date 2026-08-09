@@ -1,3 +1,6 @@
+-- Load environment variables from .env before anything else
+require("env").load()
+
 -- Auto-reload Hammerspoon config on file save
 local function reloadConfig(files)
     local doReload = false
@@ -29,6 +32,8 @@ local record = require("record")
 local apps = require("apps")
 local attention = require("attention")
 local camera = require("camera")
+local calendar = require("calendar")
+local weather = require("weather")
 local outlookProvider = require("providers.outlook")
 local slackProvider = require("providers.slack")
 local teamsProvider = require("providers.teams")
@@ -46,6 +51,10 @@ attention.start()
 
 -- Start background camera status refresh (caches ioreg data every 5s)
 camera.start()
+
+-- Start calendar and weather refresh
+calendar.start()
+weather.start()
 
 
 -- -- Start Messages webview for reading unread count from Google Messages

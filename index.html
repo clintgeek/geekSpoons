@@ -493,6 +493,159 @@
             align-items: stretch;
         }
 
+        /* --- INFO TILES (CALENDAR & WEATHER) --- */
+        .info-tiles-panel {
+            padding: 0;
+            overflow: visible;
+        }
+
+        .info-tiles-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            min-height: 110px;
+        }
+
+        .info-tile {
+            display: flex;
+            flex-direction: column;
+            padding: 12px 14px;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #121821, #0D1219);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 6px rgba(0,0,0,0.2);
+            min-height: 110px;
+        }
+
+        .next-up-tile {
+            gap: 6px;
+            flex-direction: row;
+            align-items: center;
+        }
+
+        .next-up-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .info-tile-header {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .info-tile-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+
+        .info-tile-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .info-tile-remaining {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .info-tile-join {
+            padding: 8px 14px;
+            background: linear-gradient(to bottom, #6366F1, #4F46E5);
+            border: 1px solid #4338CA;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.12s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .info-tile-join:hover {
+            background: linear-gradient(to bottom, #7C3AED, #6366F1);
+            border-color: #5B21B6;
+            transform: translateY(-1px);
+        }
+
+        .weather-tile {
+            background: linear-gradient(135deg, #4A6FA5 0%, #2E4A6F 100%);
+            background-size: cover;
+            background-position: center;
+            color: #fff;
+            gap: 6px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .weather-tile::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5));
+            z-index: 0;
+            border-radius: var(--radius-control);
+        }
+
+        .weather-main {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            z-index: 2;
+            flex: 1;
+            min-width: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+        }
+
+        .weather-location {
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 1;
+        }
+
+        .weather-temp-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .weather-temp {
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .weather-condition {
+            font-size: 13px;
+            font-weight: 600;
+            opacity: 1;
+        }
+
+        .weather-meta {
+            font-size: 10px;
+            opacity: 1;
+            margin-top: 2px;
+            line-height: 1.4;
+        }
 
         .panel-small {
             flex: 0;
@@ -1244,6 +1397,34 @@
                 </div>
             </div>
 
+            <!-- CALENDAR & WEATHER TILES -->
+            <div class="panel panel-small info-tiles-panel">
+                <div class="info-tiles-grid">
+                    <!-- NEXT UP -->
+                    <div class="info-tile next-up-tile" id="nextUpTile">
+                        <div class="next-up-content">
+                            <div class="info-tile-header" id="nextUpHeader">NEXT UP</div>
+                            <div class="info-tile-title" id="nextUpTitle">—</div>
+                            <div class="info-tile-meta" id="nextUpMeta"></div>
+                            <div class="info-tile-remaining" id="nextUpRemaining"></div>
+                        </div>
+                        <button class="info-tile-join" id="nextUpJoin" style="display: none;">JOIN</button>
+                    </div>
+
+                    <!-- WEATHER -->
+                    <div class="info-tile weather-tile" id="weatherTile">
+                        <div class="weather-main">
+                            <div class="weather-location">Arkadelphia, AR</div>
+                            <div class="weather-temp-row">
+                                <span class="weather-temp" id="weatherTemp">—</span>
+                                <span class="weather-condition" id="weatherCondition">—</span>
+                            </div>
+                            <div class="weather-meta" id="weatherMeta"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- RIGHT COLUMN -->
@@ -1493,6 +1674,82 @@
             }
         }
 
+        // --- Weather rendering ---
+        function renderWeather(w) {
+            const tile = document.getElementById('weatherTile');
+            const temp = document.getElementById('weatherTemp');
+            const cond = document.getElementById('weatherCondition');
+            const meta = document.getElementById('weatherMeta');
+
+            if (!w || !w.available) {
+                temp.textContent = '—';
+                cond.textContent = '';
+                meta.textContent = '';
+                tile.style.backgroundImage = '';
+                tile.className = 'info-tile weather-tile';
+                return;
+            }
+
+            temp.textContent = (w.temp || '') + '°';
+            cond.textContent = w.condition || '';
+
+            if (w.backgroundUrl) {
+                tile.style.backgroundImage = 'url(' + w.backgroundUrl + ')';
+            }
+
+            const parts = [];
+            if (w.feelsLike) parts.push('Feels ' + w.feelsLike + '°');
+            if (w.humidity) parts.push(w.humidity + '% humid');
+            if (w.rainChance !== undefined && w.rainChance !== '') parts.push(w.rainChance + '% rain');
+            meta.textContent = parts.join(' · ');
+
+            tile.className = 'info-tile weather-tile';
+        }
+
+        // --- Next Up rendering ---
+        function renderNextUp(up) {
+            const header = document.getElementById('nextUpHeader');
+            const title = document.getElementById('nextUpTitle');
+            const meta = document.getElementById('nextUpMeta');
+            const remaining = document.getElementById('nextUpRemaining');
+            const join = document.getElementById('nextUpJoin');
+
+            if (!up || !up.available) {
+                header.textContent = 'NEXT UP';
+                title.textContent = up && up.title ? up.title : '—';
+                meta.textContent = '';
+                remaining.textContent = '';
+                join.style.display = 'none';
+                return;
+            }
+
+            const now = new Date();
+            const start = new Date(up.start);
+            const end = new Date(up.end);
+
+            const isNow = start <= now && now < end;
+            header.textContent = isNow ? 'NOW' : 'NEXT UP';
+
+            title.textContent = up.title;
+
+            const timeFmt = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            if (isNow) {
+                meta.textContent = timeFmt(start) + ' – ' + timeFmt(end);
+                remaining.textContent = Math.max(0, Math.round((end - now) / 60000)) + ' min remaining';
+            } else {
+                meta.textContent = timeFmt(start) + ' · ' + (up.duration || Math.round((end - start) / 60000)) + ' min';
+                remaining.textContent = 'in ' + Math.max(0, Math.round((start - now) / 60000)) + ' min';
+            }
+
+            if (up.meeting && up.joinURL) {
+                join.textContent = 'JOIN ' + (up.meetingType || 'MEETING');
+                join.style.display = 'inline-block';
+                join.onclick = () => window.open(up.joinURL, '_blank');
+            } else {
+                join.style.display = 'none';
+            }
+        }
+
         // --- Status polling ---
         function updateStatus() {
             fetch('/api/status')
@@ -1595,6 +1852,15 @@
                         mergeAttention(data.attention);
                     }
 
+                    // Next Up calendar
+                    if (data.nextUp) {
+                        renderNextUp(data.nextUp);
+                    }
+
+                    // Weather
+                    if (data.weather) {
+                        renderWeather(data.weather);
+                    }
 
                 })
                 .catch(err => console.log('Status error:', err));

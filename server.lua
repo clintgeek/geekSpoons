@@ -12,6 +12,8 @@ local record = require("record")
 local apps = require("apps")
 local attention = require("attention")
 local camera = require("camera")
+local calendar = require("calendar")
+local weather = require("weather")
 
 local httpServer = nil
 local port = 8080
@@ -27,7 +29,11 @@ local function corsHeaders(contentType)
 end
 
 local function jsonResponse(data)
-    local jsonStr = hs.json.encode(data)
+    local ok, jsonStr = pcall(hs.json.encode, data)
+    if not ok then
+        print("json encode error: " .. tostring(jsonStr))
+        return '{"error":"json encode failed"}', 500, corsHeaders("application/json")
+    end
     return jsonStr, 200, corsHeaders("application/json")
 end
 
@@ -2255,13 +2261,18 @@ local function handleRequest(method, path, headers, body)
     elseif path == "/icon.svg" then
         return getIconSVG()
     elseif path == "/api/status" then
+        local function safeStatus(fn)
+            local ok, result = pcall(fn)
+            if ok then return result else return { error = tostring(result) } end
+        end
         local data = {
-            micMuted = mute.isMuted(),
-            audio = audio.getStatus(),
-            spotify = spotify.getStatus(),
-            attention = attention.getStatus(),
-            camera = camera.getStatus(),
-
+            micMuted = safeStatus(function() return mute.isMuted() end),
+            audio = safeStatus(function() return audio.getStatus() end),
+            spotify = safeStatus(function() return spotify.getStatus() end),
+            attention = safeStatus(function() return attention.getStatus() end),
+            camera = safeStatus(function() return camera.getStatus() end),
+            nextUp = safeStatus(function() return calendar.getStatus() end),
+            weather = safeStatus(function() return weather.getStatus() end),
         }
         return jsonResponse(data)
     elseif path == "/api/debug/attention" then

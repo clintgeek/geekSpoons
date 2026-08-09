@@ -1,6 +1,9 @@
 -- apps.lua: Smart Workspace Application Launcher for Hammerspoon
 local apps = {}
 
+local env = require("env")
+local HOME = env.get("HOME") or ""
+
 apps.config = {
     chrome = {
         name = "Google Chrome",
@@ -8,13 +11,13 @@ apps.config = {
     },
     messages = {
         name = "Messages",
-        path = "/Users/clintcrocker/Applications/Chrome Apps.localized/Messages.app",
+        path = env.get("MESSAGES_APP_PATH") or (HOME .. "/Applications/Chrome Apps.localized/Messages.app"),
         matchPath = "Chrome Apps.localized/Messages.app",
         appUrl = "https://messages.google.com/web/u/1/conversations"
     },
     chatgpt = {
         name = "ChatGPT",
-        path = "/Users/clintcrocker/Applications/Edge Apps.localized/ChatGPT.app"
+        path = env.get("CHATGPT_APP_PATH") or (HOME .. "/Applications/Edge Apps.localized/ChatGPT.app")
     },
     teams = {
         name = "Microsoft Teams",
