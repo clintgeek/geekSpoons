@@ -548,15 +548,24 @@
         }
 
         .info-tile-meta {
-            font-size: 11px;
+            font-size: 13px;
             color: var(--text-secondary);
             margin-top: 2px;
         }
 
         .info-tile-remaining {
-            font-size: 10px;
+            font-size: 14px;
+            font-weight: 700;
             color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 6px;
+        }
+
+        .info-tile-remaining.urgent {
+            color: var(--red);
+        }
+
+        .info-tile-remaining.soon {
+            color: var(--amber);
         }
 
         .info-tile-join {
@@ -1742,10 +1751,24 @@
             const timeFmt = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             if (isNow) {
                 meta.textContent = timeFmt(start) + ' – ' + timeFmt(end);
-                remaining.textContent = Math.max(0, Math.round((end - now) / 60000)) + ' min remaining';
+                const minsLeft = Math.max(0, Math.round((end - now) / 60000));
+                remaining.textContent = minsLeft + ' min remaining';
+                remaining.className = 'info-tile-remaining urgent';
             } else {
                 meta.textContent = timeFmt(start) + ' · ' + (up.duration || Math.round((end - start) / 60000)) + ' min';
-                remaining.textContent = 'in ' + Math.max(0, Math.round((start - now) / 60000)) + ' min';
+                const minsUntil = Math.max(0, Math.round((start - now) / 60000));
+                if (minsUntil < 120) {
+                    remaining.textContent = 'in ' + minsUntil + ' min';
+                    remaining.className = 'info-tile-remaining urgent';
+                } else if (minsUntil < 1440) {
+                    const hours = Math.round(minsUntil / 60);
+                    remaining.textContent = 'in ' + hours + ' hour' + (hours !== 1 ? 's' : '');
+                    remaining.className = 'info-tile-remaining soon';
+                } else {
+                    const days = Math.round(minsUntil / 1440);
+                    remaining.textContent = 'in ' + days + ' day' + (days !== 1 ? 's' : '');
+                    remaining.className = 'info-tile-remaining';
+                }
             }
 
             if (up.meeting && up.joinURL) {
