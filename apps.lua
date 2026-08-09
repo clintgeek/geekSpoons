@@ -7,8 +7,10 @@ apps.config = {
         path = "/Applications/Google Chrome.app"
     },
     messages = {
-        name = "Google Chrome",
-        path = "/Users/clintcrocker/Applications/Chrome Apps.localized/Messages.app"
+        name = "Messages",
+        path = "/Users/clintcrocker/Applications/Chrome Apps.localized/Messages.app",
+        matchPath = "Chrome Apps.localized/Messages.app",
+        appUrl = "https://messages.google.com/web/u/1/conversations"
     },
     chatgpt = {
         name = "ChatGPT",
@@ -71,6 +73,12 @@ function apps.smartLaunch(appKey)
         return
     end
 
+    -- For PWA apps (matchPath), just use `open` — the OS handles focus/launch like Finder
+    if config.matchPath then
+        hs.execute('open "' .. config.path .. '"')
+        return
+    end
+
     local app = hs.application.get(config.name) or hs.application.get(config.path)
     
     if app and app:isRunning() then
@@ -95,7 +103,7 @@ function apps.smartLaunch(appKey)
             win:focus()
             win:raise()
         else
-            -- App is running BUT has 0 active windows -> Force reopen new window & maximize
+            -- App is running BUT has 0 active windows -> Reopen
             hs.application.launchOrFocus(config.path)
             hs.applescript(string.format([[
                 tell application "%s"
@@ -129,7 +137,18 @@ function apps.smartLaunch(appKey)
         local timer
         timer = hs.timer.doEvery(0.3, function()
             attempts = attempts + 1
-            local a = hs.application.get(config.name)
+            -- For PWAs with matchPath, find by path; otherwise by name
+            local a = nil
+            if config.matchPath then
+                for _, app in ipairs(hs.application.runningApplications()) do
+                    if (app:path() or ""):match(config.matchPath) then
+                        a = app
+                        break
+                    end
+                end
+            else
+                a = hs.application.get(config.name)
+            end
             if a then
                 local w = a:mainWindow() or (a:allWindows() and a:allWindows()[1])
                 if w then

@@ -1000,12 +1000,13 @@
 
         .app-sublabel {
             font-family: 'SF Mono', Menlo, Consolas, monospace;
-            font-size: 11px;
+            font-size: 16px;
+            font-weight: 600;
             color: var(--text-muted);
             letter-spacing: 0.04em;
             text-align: center;
             line-height: 1.2;
-            min-height: 13px;
+            min-height: 18px;
         }
 
         .app-launcher.attention .app-sublabel {
@@ -1020,6 +1021,17 @@
             color: var(--text-muted);
             font-style: italic;
         }
+
+        .app-launcher.loading .app-sublabel {
+            color: var(--green);
+        }
+        .app-launcher.loading {
+            border-color: rgba(24,216,102,0.35);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 0 12px rgba(24,216,102,0.10);
+        }
+
+        .app-sublabel .seg-amber { color: var(--amber); }
+        .app-sublabel .seg-red { color: var(--red); }
 
         .app-icon-lg {
             width: 52px;
@@ -1455,7 +1467,7 @@
     <script>
         // --- Actions ---
         function triggerAction(action) {
-            fetch('/api/action/' + action, { method: 'POST' })
+            fetch('/api/action/' + action, { method: 'POST', body: '{}' })
                 .then(r => r.json())
                 .then(data => {
                     // Apply mic state immediately if returned
@@ -1506,14 +1518,15 @@
             };
             const startTalk = () => {
                 talkBtn.classList.add('pushed');
-                fetch('/api/action/talk_start', { method: 'POST' })
+                fetch('/api/action/talk_start', { method: 'POST', body: '{}' })
                     .then(r => r.json())
                     .then(data => { if (data && data.micMuted !== undefined) applyMicState(data.micMuted); })
                     .catch(() => {});
             };
             const stopTalk = () => {
+                if (!talkBtn.classList.contains('pushed')) return;
                 talkBtn.classList.remove('pushed');
-                fetch('/api/action/talk_stop', { method: 'POST' })
+                fetch('/api/action/talk_stop', { method: 'POST', body: '{}' })
                     .then(r => r.json())
                     .then(data => { if (data && data.micMuted !== undefined) applyMicState(data.micMuted); })
                     .catch(() => {});
@@ -1674,7 +1687,7 @@
 
         // --- Playlist modal ---
         function playUri(trackUri, contextUri) {
-            fetch('/api/action/play_uri?track=' + encodeURIComponent(trackUri) + '&context=' + encodeURIComponent(contextUri), { method: 'POST' });
+            fetch('/api/action/play_uri?track=' + encodeURIComponent(trackUri) + '&context=' + encodeURIComponent(contextUri), { method: 'POST', body: '{}' });
             togglePlaylistModal();
             setTimeout(updateStatus, 500);
         }
@@ -1704,9 +1717,16 @@
                 const badge = tile.querySelector('.app-badge');
                 const sublabel = tile.querySelector('.app-sublabel');
 
-                tile.classList.remove('attention', 'urgent', 'unreadable');
+                tile.classList.remove('attention', 'urgent', 'unreadable', 'loading');
 
                 if (!badge || !sublabel) return;
+
+                if (info && info.severity === 'loading') {
+                    tile.classList.add('loading');
+                    badge.textContent = '';
+                    sublabel.textContent = info.label || 'Loading...';
+                    return;
+                }
 
                 if (!info || info.severity === 'none' || info.count === 0) {
                     if (info && info.severity === 'unreadable') {
@@ -1729,7 +1749,15 @@
                 }
 
                 badge.textContent = info.count > 99 ? '99+' : info.count;
-                sublabel.textContent = info.label || '';
+                // Render sublabel with optional colored segments
+                if (info.segments && info.segments.length > 0) {
+                    sublabel.innerHTML = info.segments.map(s => {
+                        const cls = s.color === 'red' ? 'seg-red' : s.color === 'amber' ? 'seg-amber' : '';
+                        return '<span class="' + cls + '">' + s.text + '</span>';
+                    }).join(' ');
+                } else {
+                    sublabel.textContent = info.label || '';
+                }
                 detailParts.push({ name: appId, count: info.count, label: info.label || '', severity: info.severity });
             });
 
@@ -1791,10 +1819,10 @@
         setInterval(updateStatus, 1000);
         updateStatus();
 
-        // Register service worker for PWA installability
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
-        }
+        // Service worker disabled to prevent stale HTML caching
+        // if ('serviceWorker' in navigator) {
+        //     navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // }
     </script>
 
     <div id="playlistModal" class="modal-overlay" onclick="if(event.target === this) togglePlaylistModal()">
