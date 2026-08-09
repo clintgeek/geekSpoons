@@ -1,77 +1,81 @@
 -- providers/outlook.lua: Outlook unread mail attention provider
--- Uses accessibility (AXUIElement) to read unread counts from the Outlook sidebar.
--- New Outlook (16.111+) doesn't expose Exchange messages via AppleScript, but the
--- navigation pane shows "FolderName; N unread messages" in cell descriptions.
+-- Reads unread count from Outlook's OSA (Outlook Service API) sync logs.
+-- The new Edge-based Outlook doesn't expose mail via AppleScript or AXUIElement,
+-- but its sync logs contain GetFolder responses with <UnreadCount> per folder.
+-- We search across recent OSA sessions for the latest GetFolder response
+-- (not GetFolderList, which doesn't contain unread counts).
 
 local outlook = {}
-
--- Recursively search for AXCell elements with "; N unread messages" in their description
-local function findUnreadInCells(elem, found, depth)
-    if not elem or depth > 10 then return end
-
-    local role = elem:attributeValue("AXRole")
-    local desc = elem:attributeValue("AXDescription")
-
-    -- Match cells like "Inbox; 9 unread messages"
-    if role == "AXCell" and desc then
-        local descStr = tostring(desc)
-        local folderName, count = descStr:match("^(.-);%s*(%d+)%s+unread%s+messages")
-        if folderName and count then
-            local n = tonumber(count) or 0
-            -- Only count Inbox (skip Deleted Items, Junk, Promotions, etc.)
-            if folderName:lower() == "inbox" and n > 0 then
-                table.insert(found, { folder = folderName, count = n })
-            end
-        end
-    end
-
-    local children = elem:attributeValue("AXChildren")
-    if children then
-        for _, child in ipairs(children) do
-            findUnreadInCells(child, found, depth + 1)
-        end
-    end
-end
 
 function outlook.getAttention()
     local app = hs.application.find("Microsoft Outlook")
     if not app then
+        return { severity = "unreadable", count = 0, label = "not running" }
+    end
+
+    -- Path to the OSA log directory
+    local osaBase = os.getenv("HOME") ..
+        "/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Identity/Osa"
+
+    -- Search the 3 most recent OSA sessions for a GetFolder response
+    -- (not GetFolderList, which doesn't have UnreadCount)
+    local sessions = hs.execute('ls -t "' .. osaBase .. '" 2>/dev/null | head -3')
+    if not sessions or sessions == "" then
         return { severity = "none", count = 0, label = "" }
     end
 
-    local elem = hs.axuielement.applicationElement(app)
-    if not elem then
-        return { severity = "none", count = 0, label = "" }
-    end
+    for session in sessions:gmatch("[^\n]+") do
+        session = session:gsub("%s+$", "")
+        local sessionDir = osaBase .. "/" .. session
 
-    -- Find the Inbox window (not the Reminders window)
-    local windows = elem:attributeValue("AXWindows")
-    if not windows then
-        return { severity = "none", count = 0, label = "" }
-    end
+        -- Find the most recent GetFolder response (exclude GetFolderList)
+        local latestFile = hs.execute(
+            'ls -t "' .. sessionDir .. '" 2>/dev/null | ' ..
+            'grep "sync\\.GetFolder\\." | grep "res" | head -1'
+        )
+        if latestFile and latestFile ~= "" then
+            latestFile = latestFile:gsub("%s+$", "")
 
-    local found = {}
-    for _, win in ipairs(windows) do
-        local title = win:attributeValue("AXTitle")
-        if title and tostring(title):match("Inbox") then
-            findUnreadInCells(win, found, 0)
+            -- Decompress the XML
+            local content = hs.execute('gunzip -c "' .. sessionDir .. '/' .. latestFile .. '" 2>/dev/null')
+            if content and content ~= "" then
+                -- Parse line by line: track the current folder type, then grab the next UnreadCount
+                local currentFolderType = nil
+                local inboxCount = 0
+
+                for line in content:gmatch("[^\r\n]+") do
+                    -- Match folder type lines like <Type>Inbox (1)</Type> (not <Type>0</Type>)
+                    local folderType = line:match("<Type>([A-Za-z]+[^<]*)</Type>")
+                    if folderType then
+                        currentFolderType = folderType
+                    end
+
+                    -- Match unread count lines
+                    local unread = line:match("<UnreadCount>(%d+)</UnreadCount>")
+                    if unread and currentFolderType then
+                        if currentFolderType:match("Inbox") then
+                            inboxCount = tonumber(unread) or 0
+                        end
+                        currentFolderType = nil
+                    end
+                end
+
+                if inboxCount > 0 then
+                    return {
+                        severity = "attention",
+                        count = inboxCount,
+                        label = inboxCount .. " unread"
+                    }
+                end
+
+                -- Found a GetFolder response but Inbox has 0 unread
+                return { severity = "none", count = 0, label = "" }
+            end
         end
     end
 
-    local totalCount = 0
-    for _, item in ipairs(found) do
-        totalCount = totalCount + item.count
-    end
-
-    if totalCount == 0 then
-        return { severity = "none", count = 0, label = "" }
-    end
-
-    return {
-        severity = "attention",
-        count = totalCount,
-        label = totalCount .. " unread"
-    }
+    -- Outlook is running but no sync data found yet
+    return { severity = "none", count = 0, label = "" }
 end
 
 return outlook

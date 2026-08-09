@@ -7,8 +7,8 @@ apps.config = {
         path = "/Applications/Google Chrome.app"
     },
     messages = {
-        name = "Messages",
-        path = "/Users/clintcrocker/Applications/Edge Apps.localized/Messages.app"
+        name = "Google Chrome",
+        path = "/Users/clintcrocker/Applications/Chrome Apps.localized/Messages.app"
     },
     chatgpt = {
         name = "ChatGPT",
@@ -35,6 +35,41 @@ apps.config = {
 function apps.smartLaunch(appKey)
     local config = apps.config[appKey]
     if not config then return end
+
+    -- If the app has a URL, open/focus it in the configured browser
+    if config.url then
+        local browserName = config.browser or config.name
+        local browser = hs.application.get(browserName)
+        if browser and browser:isRunning() then
+            -- Browser is running — check if the tab is already open
+            local script = string.format([[
+                tell application "%s"
+                    set foundTab to false
+                    repeat with w in every window
+                        repeat with t in every tab of w
+                            if (URL of t) contains "%s" then
+                                tell w to set active tab index to (index of t)
+                                set index of w to 1
+                                activate
+                                set foundTab to true
+                                exit repeat
+                            end if
+                        end repeat
+                        if foundTab then exit repeat
+                    end repeat
+                    if not foundTab then
+                        tell window 1 to make new tab with properties {URL:"%s"}
+                        activate
+                    end if
+                end tell
+            ]], browserName, config.url, config.url)
+            hs.osascript.applescript(script)
+        else
+            -- Browser not running — launch the PWA app
+            hs.application.launchOrFocus(config.path)
+        end
+        return
+    end
 
     local app = hs.application.get(config.name) or hs.application.get(config.path)
     

@@ -16,6 +16,11 @@ local function refresh()
         if ok and type(result) == "table" then
             newState[appId] = result
         else
+            local f = io.open("/tmp/attention_debug.log", "a")
+            if f then
+                f:write(os.date("%H:%M:%S") .. " provider " .. appId .. " error: " .. tostring(result) .. "\n")
+                f:close()
+            end
             newState[appId] = { severity = "none", count = 0, label = "" }
         end
     end

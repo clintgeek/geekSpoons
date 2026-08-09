@@ -8,7 +8,7 @@ local teams = {}
 function teams.getAttention()
     local app = hs.application.find("Microsoft Teams")
     if not app then
-        return { severity = "none", count = 0, label = "" }
+        return { severity = "unreadable", count = 0, label = "not running" }
     end
 
     -- Find the Dock process and navigate to the Teams dock item
@@ -64,6 +64,7 @@ function teams.getAttention()
         end
     end
 
+    -- Teams is running but no badge found — dock badge not available
     return { severity = "none", count = 0, label = "" }
 end
 

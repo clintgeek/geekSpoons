@@ -12,7 +12,7 @@ local LS_DIR = STORAGE_DIR .. "/Local Storage/leveldb"
 function slack.getAttention()
     local app = hs.application.find("Slack")
     if not app then
-        return { severity = "none", count = 0, label = "" }
+        return { severity = "unreadable", count = 0, label = "not running" }
     end
 
     -- Try root-state.json first (most reliable)

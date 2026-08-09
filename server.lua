@@ -2176,12 +2176,18 @@ local function getHTML()
                 .then(data => {
                     const micBtn = document.getElementById('micBtn');
                     const micLabel = document.getElementById('micLabel');
+                    const micTile = document.getElementById('micTile');
+                    const micTileLabel = document.getElementById('micTileLabel');
                     if (data.micMuted) {
-                        micBtn.className = 'tile tile-mic muted';
+                        micBtn.className = 'tb-btn active-muted';
                         micLabel.innerText = 'MIC MUTED';
+                        if (micTile) { micTile.className = 'meeting-tile active-muted'; }
+                        if (micTileLabel) { micTileLabel.innerText = 'MIC MUTED'; }
                     } else {
-                        micBtn.className = 'tile tile-mic live';
+                        micBtn.className = 'tb-btn active-live';
                         micLabel.innerText = 'MIC LIVE';
+                        if (micTile) { micTile.className = 'meeting-tile active-live'; }
+                        if (micTileLabel) { micTileLabel.innerText = 'MIC LIVE'; }
                     }
 
                     if (data.audio) {
