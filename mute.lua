@@ -6,6 +6,8 @@ local mute = {}
 
 local muteCanvas = nil
 local savedInputVolume = nil  -- volume to restore on unmute
+local DEFAULT_INPUT_VOLUME = 73  -- restored when no saved volume exists
+local HUD_DISPLAY_SECS = 2.0     -- how long the mute HUD stays visible
 
 local function showMuteHUD(isMuted)
     if muteCanvas then
@@ -46,7 +48,7 @@ local function showMuteHUD(isMuted)
     muteCanvas:level(hs.canvas.levels.overlay)
     muteCanvas:show()
 
-    hs.timer.doAfter(2.0, function()
+    hs.timer.doAfter(HUD_DISPLAY_SECS, function()
         if muteCanvas then
             muteCanvas:delete()
             muteCanvas = nil
@@ -68,8 +70,8 @@ function mute.toggleMute()
     if dev then
         local vol = dev:inputVolume() or 0
         if vol == 0 then
-            -- Unmute: restore saved volume (or default to 73)
-            local restoreVol = savedInputVolume or 73
+            -- Unmute: restore saved volume (or default)
+            local restoreVol = savedInputVolume or DEFAULT_INPUT_VOLUME
             dev:setInputVolume(restoreVol)
             hs.timer.doAfter(0, function() showMuteHUD(false) end)
             return false
@@ -92,7 +94,7 @@ function mute.setMute(state)
             if vol > 0 then savedInputVolume = vol end
             dev:setInputVolume(0)
         else
-            dev:setInputVolume(savedInputVolume or 73)
+            dev:setInputVolume(savedInputVolume or DEFAULT_INPUT_VOLUME)
         end
         hs.timer.doAfter(0, function() showMuteHUD(state) end)
         return state
@@ -104,7 +106,7 @@ end
 function mute.startTalk()
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
-        dev:setInputVolume(savedInputVolume or 73)
+        dev:setInputVolume(savedInputVolume or DEFAULT_INPUT_VOLUME)
         hs.timer.doAfter(0, function() showMuteHUD(false) end)
         return false
     end

@@ -4,6 +4,7 @@
 const WebSocket = require(require('path').join(__dirname, 'node_modules', 'ws'));
 
 const DEBUG_PORT = 9222;
+const TIMEOUT_MS = 3000;  // give up if Slack doesn't respond in 3 seconds
 
 async function getUnreadCount() {
     // Get the list of debug targets
@@ -73,7 +74,7 @@ async function getUnreadCount() {
         console.log(JSON.stringify({error: err.message, channels: 0, dms: 0, badges: 0}));
     });
     
-    setTimeout(() => { ws.close(); process.exit(0); }, 3000);
+    setTimeout(() => { ws.close(); process.exit(0); }, TIMEOUT_MS);
 }
 
 getUnreadCount().catch(e => console.log(JSON.stringify({error: e.message, channels: 0, dms: 0, badges: 0})));

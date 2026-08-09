@@ -28,8 +28,8 @@ local function refresh()
     hs.task.new(node, function(exitCode, stdOut, stdErr)
         running = false
         if exitCode == 0 and stdOut and stdOut:gsub("%s+$", "") ~= "" then
-            local data = hs.json.decode(stdOut)
-            if data and type(data) == "table" then
+            local ok, data = pcall(hs.json.decode, stdOut)
+            if ok and data and type(data) == "table" then
                 cachedState = data
             else
                 cachedState = { available = false, title = "No upcoming events" }

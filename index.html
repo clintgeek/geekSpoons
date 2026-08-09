@@ -819,6 +819,11 @@
             box-shadow: 0 0 6px var(--green);
         }
 
+        .status-dot.idle {
+            background: var(--text-muted);
+            box-shadow: none;
+        }
+
         .now-playing {
             display: flex;
             gap: 20px;
@@ -1179,6 +1184,10 @@
         .app-icon-lg svg {
             width: 34px;
             height: 34px;
+        }
+
+        .app-icon-lg i {
+            font-size: 20px;
         }
 
         .app-name {
@@ -1548,7 +1557,7 @@
                     <div class="app-launcher" data-app-id="next" onclick="triggerAction('window_next_screen')">
                         <div class="app-badge"></div>
                         <div class="app-icon-lg app-next">
-                            <i class="ph-bold ph-monitor" style="font-size:20px"></i>
+                            <i class="ph-bold ph-monitor"></i>
                         </div>
                         <div class="app-name">Next Display</div>
                         <div class="app-sublabel"></div>
@@ -1559,37 +1568,37 @@
     </div>
 
     <script>
+        // --- UI state helpers ---
+        function applyMicState(muted) {
+            const micBtn = document.getElementById('micBtn');
+            const micLabel = document.getElementById('micLabel');
+            if (!micBtn || !micLabel) return;
+            micBtn.classList.remove('live', 'muted');
+            micBtn.classList.add(muted ? 'muted' : 'live');
+            micLabel.textContent = muted ? 'MIC MUTED' : 'MIC LIVE';
+        }
+
+        function applyAudioMuteState(muted) {
+            const audioMuteBtn = document.getElementById('audioMuteBtn');
+            const audioMuteLabel = document.getElementById('audioMuteLabel');
+            if (!audioMuteBtn || !audioMuteLabel) return;
+            if (muted) {
+                audioMuteBtn.classList.add('muted');
+                audioMuteLabel.textContent = 'SOUND MUTED';
+            } else {
+                audioMuteBtn.classList.remove('muted');
+                const vol = (window._lastAudioVol || 0);
+                audioMuteLabel.textContent = 'MUTE SOUND (' + vol + '%)';
+            }
+        }
+
         // --- Actions ---
         function triggerAction(action) {
             fetch('/api/action/' + action, { method: 'POST', body: '{}' })
                 .then(r => r.json())
                 .then(data => {
-                    // Apply mic state immediately if returned
-                    if (data && data.micMuted !== undefined) {
-                        const micBtn = document.getElementById('micBtn');
-                        const micLabel = document.getElementById('micLabel');
-                        micBtn.classList.remove('live', 'muted');
-                        if (data.micMuted) {
-                            micBtn.classList.add('muted');
-                            micLabel.textContent = 'MIC MUTED';
-                        } else {
-                            micBtn.classList.add('live');
-                            micLabel.textContent = 'MIC LIVE';
-                        }
-                    }
-                    // Apply audio mute state immediately if returned
-                    if (data && data.audioMuted !== undefined) {
-                        const audioMuteBtn = document.getElementById('audioMuteBtn');
-                        const audioMuteLabel = document.getElementById('audioMuteLabel');
-                        if (data.audioMuted) {
-                            audioMuteBtn.classList.add('muted');
-                            audioMuteLabel.textContent = 'SOUND MUTED';
-                        } else {
-                            audioMuteBtn.classList.remove('muted');
-                            const vol = (window._lastAudioVol || 0);
-                            audioMuteLabel.textContent = 'MUTE SOUND (' + vol + '%)';
-                        }
-                    }
+                    if (data && data.micMuted !== undefined) applyMicState(data.micMuted);
+                    if (data && data.audioMuted !== undefined) applyAudioMuteState(data.audioMuted);
                 })
                 .catch(e => console.log('Action failed:', e));
             setTimeout(updateStatus, 300);
@@ -1598,18 +1607,6 @@
         // --- Talk button touch handlers ---
         const talkBtn = document.getElementById('talkBtn');
         if (talkBtn) {
-            const applyMicState = (muted) => {
-                const micBtn = document.getElementById('micBtn');
-                const micLabel = document.getElementById('micLabel');
-                micBtn.classList.remove('live', 'muted');
-                if (muted) {
-                    micBtn.classList.add('muted');
-                    micLabel.textContent = 'MIC MUTED';
-                } else {
-                    micBtn.classList.add('live');
-                    micLabel.textContent = 'MIC LIVE';
-                }
-            };
             const startTalk = () => {
                 talkBtn.classList.add('pushed');
                 fetch('/api/action/talk_start', { method: 'POST', body: '{}' })
@@ -1639,24 +1636,34 @@
             return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
         }
 
+        let lastTrack = '';
+        let lastArtworkKey = '';
+        const artworkCache = {};  // key: "artist|album" → artwork URL (avoids refetching)
+
         function updateAlbumArtwork(artist, album) {
             const key = artist + '|' + album;
             if (!artist || !album || key === lastArtworkKey) return;
             lastArtworkKey = key;
+
+            // Serve from cache if we've already fetched this album
+            if (artworkCache[key]) {
+                document.querySelector('.spotify-panel').style.setProperty('--album-art', 'url("' + artworkCache[key] + '")');
+                return;
+            }
+
             const query = encodeURIComponent(artist + ' ' + album);
             fetch('https://itunes.apple.com/search?term=' + query + '&entity=album&limit=1')
                 .then(r => r.json())
                 .then(result => {
                     const artwork = result.results && result.results[0] && result.results[0].artworkUrl100;
                     if (artwork) {
-                        document.querySelector('.spotify-panel').style.setProperty('--album-art', 'url("' + artwork.replace('100x100', '600x600') + '")');
+                        const hiRes = artwork.replace('100x100', '600x600');
+                        artworkCache[key] = hiRes;
+                        document.querySelector('.spotify-panel').style.setProperty('--album-art', 'url("' + hiRes + '")');
                     }
                 })
                 .catch(() => {});
         }
-
-        let lastTrack = '';
-        let lastArtworkKey = '';
 
         function updateMarquee(track) {
             const el = document.getElementById('trackName');
@@ -1750,118 +1757,79 @@
             }
         }
 
+        // --- Per-component status updaters ---
+        function updateCamera(cam) {
+            const camBtn = document.getElementById('camBtn');
+            const camLabel = document.getElementById('camLabel');
+            camBtn.classList.remove('live', 'muted', 'blocked');
+            if (cam && cam.inUse) {
+                if (cam.blocked) {
+                    camBtn.classList.add('blocked');
+                    camLabel.textContent = 'CAM BLOCKED';
+                } else {
+                    camBtn.classList.add('live');
+                    camLabel.textContent = 'CAM ACTIVE';
+                }
+            } else {
+                camLabel.textContent = 'CAMERA';
+            }
+        }
+
+        function updateAudio(audio) {
+            if (!audio) return;
+            const vol = audio.volume || 0;
+            window._lastAudioVol = vol;
+            document.getElementById('audioOutputName').textContent = audio.name || 'Unknown Output';
+            applyAudioMuteState(audio.isMuted);
+        }
+
+        function updateSpotify(sp) {
+            if (!sp) return;
+            const track = sp.track || 'No Track';
+            const artist = sp.artist || '';
+            const album = sp.album || '';
+
+            document.getElementById('trackName').textContent = track;
+            updateMarquee(track);
+            document.getElementById('artistName').textContent = artist;
+            document.getElementById('albumName').textContent = album;
+            updateAlbumArtwork(artist, album);
+
+            const conn = document.getElementById('spConnection');
+            if (sp.isRunning) {
+                conn.innerHTML = '<span class="status-dot"></span> SPOTIFY CONNECTED';
+                conn.style.color = 'var(--green)';
+            } else {
+                conn.innerHTML = '<span class="status-dot idle"></span> SPOTIFY IDLE';
+                conn.style.color = 'var(--text-secondary)';
+            }
+
+            const pos = sp.position || 0;
+            const dur = sp.duration || 1;
+            const pct = dur ? (pos / dur * 100) : 0;
+            document.getElementById('posTime').textContent = formatTime(pos);
+            document.getElementById('durTime').textContent = formatTime(dur);
+            document.getElementById('progressFill').style.width = pct + '%';
+
+            document.getElementById('playIcon').style.display = sp.isPlaying ? 'none' : 'block';
+            document.getElementById('pauseIcon').style.display = sp.isPlaying ? 'block' : 'none';
+            document.getElementById('shufBtn').classList.toggle('active', sp.shuffle);
+            document.getElementById('repBtn').classList.toggle('active', sp.repeatState);
+        }
+
         // --- Status polling ---
         function updateStatus() {
             fetch('/api/status')
                 .then(r => r.json())
                 .then(data => {
-                    // Mic
-                    const micBtn = document.getElementById('micBtn');
-                    const micLabel = document.getElementById('micLabel');
-                    if (data.micMuted) {
-                        micBtn.classList.remove('live');
-                        micBtn.classList.add('muted');
-                        micLabel.textContent = 'MIC MUTED';
-                    } else {
-                        micBtn.classList.remove('muted');
-                        micBtn.classList.add('live');
-                        micLabel.textContent = 'MIC LIVE';
-                    }
+                    applyMicState(data.micMuted);
+                    updateCamera(data.camera);
+                    updateAudio(data.audio);
+                    updateSpotify(data.spotify);
 
-                    // Camera
-                    const camBtn = document.getElementById('camBtn');
-                    const camLabel = document.getElementById('camLabel');
-                    camBtn.classList.remove('live', 'muted', 'blocked');
-                    if (data.camera && data.camera.inUse) {
-                        if (data.camera.blocked) {
-                            camBtn.classList.add('blocked');
-                            camLabel.textContent = 'CAM BLOCKED';
-                        } else {
-                            camBtn.classList.add('live');
-                            camLabel.textContent = 'CAM ACTIVE';
-                        }
-                    } else {
-                        camLabel.textContent = 'CAMERA';
-                    }
-
-                    // Audio
-                    if (data.audio) {
-                        const outName = data.audio.name || 'Unknown Output';
-                        const vol = data.audio.volume || 0;
-                        const isMuted = data.audio.isMuted;
-                        window._lastAudioVol = vol;
-
-                        document.getElementById('audioOutputName').textContent = outName;
-
-                        const audioMuteBtn = document.getElementById('audioMuteBtn');
-                        const audioMuteLabel = document.getElementById('audioMuteLabel');
-                        if (isMuted) {
-                            audioMuteBtn.classList.add('muted');
-                            audioMuteLabel.textContent = 'SOUND MUTED';
-                        } else {
-                            audioMuteBtn.classList.remove('muted');
-                            audioMuteLabel.textContent = 'MUTE SOUND (' + vol + '%)';
-                        }
-                    }
-
-                    // Spotify
-                    if (data.spotify) {
-                        const sp = data.spotify;
-                        const track = sp.track || 'No Track';
-                        const artist = sp.artist || '';
-                        const album = sp.album || '';
-
-                        document.getElementById('trackName').textContent = track;
-                        updateMarquee(track);
-                        document.getElementById('artistName').textContent = artist;
-                        document.getElementById('albumName').textContent = album;
-                        updateAlbumArtwork(artist, album);
-
-                        const conn = document.getElementById('spConnection');
-                        if (sp.isRunning) {
-                            conn.innerHTML = '<span class="status-dot"></span> SPOTIFY CONNECTED';
-                            conn.style.color = 'var(--green)';
-                        } else {
-                            conn.innerHTML = '<span class="status-dot" style="background:var(--text-muted);box-shadow:none"></span> SPOTIFY IDLE';
-                            conn.style.color = 'var(--text-secondary)';
-                        }
-
-                        const pos = sp.position || 0;
-                        const dur = sp.duration || 1;
-                        const pct = dur ? (pos / dur * 100) : 0;
-                        document.getElementById('posTime').textContent = formatTime(pos);
-                        document.getElementById('durTime').textContent = formatTime(dur);
-                        document.getElementById('progressFill').style.width = pct + '%';
-
-                        const playIcon = document.getElementById('playIcon');
-                        const pauseIcon = document.getElementById('pauseIcon');
-                        if (sp.isPlaying) {
-                            playIcon.style.display = 'none';
-                            pauseIcon.style.display = 'block';
-                        } else {
-                            playIcon.style.display = 'block';
-                            pauseIcon.style.display = 'none';
-                        }
-
-                        document.getElementById('shufBtn').classList.toggle('active', sp.shuffle);
-                        document.getElementById('repBtn').classList.toggle('active', sp.repeatState);
-                    }
-
-                    // Attention state from providers
-                    if (data.attention) {
-                        mergeAttention(data.attention);
-                    }
-
-                    // Next Up calendar
-                    if (data.nextUp) {
-                        renderNextUp(data.nextUp);
-                    }
-
-                    // Weather
-                    if (data.weather) {
-                        renderWeather(data.weather);
-                    }
-
+                    if (data.attention) mergeAttention(data.attention);
+                    if (data.nextUp) renderNextUp(data.nextUp);
+                    if (data.weather) renderWeather(data.weather);
                 })
                 .catch(err => console.log('Status error:', err));
         }

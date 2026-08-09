@@ -7,72 +7,72 @@ local teams = {}
 
 local CACHE_FILE = "/tmp/teams_attention.json"
 
-function teams.getAttention()
-    -- Use bundle ID to find the main Teams app, not the background agent process
-    local app = hs.application.get("com.microsoft.teams2")
-    if not app then
-        return { severity = "unreadable", count = 0, label = "not running" }
-    end
-    -- Verify it's the main app (has a window), not just the background agent
-    if not app:mainWindow() then
-        return { severity = "unreadable", count = 0, label = "not running" }
+-- Build the attention result from cached counts (people, meetings, channels).
+-- DMs from people are urgent; everything else is attention-level.
+local function buildResult(people, meetings, channels)
+    local total = people + meetings + channels
+    if total == 0 then
+        return { severity = "none", count = 0, label = "" }
     end
 
-    -- Read cached result from background refresh (instant file I/O)
+    local parts = {}
+    local segments = {}
+    if meetings > 0 then
+        table.insert(parts, meetings .. " mtg")
+        table.insert(segments, { text = meetings .. " mtg", color = "amber" })
+    end
+    if people > 0 then
+        table.insert(parts, people .. " dm")
+        table.insert(segments, { text = people .. " dm", color = "red" })
+    end
+    if channels > 0 then
+        table.insert(parts, channels .. " ch")
+        table.insert(segments, { text = channels .. " ch", color = "amber" })
+    end
+
+    local label = table.concat(parts, " ")
+    if people > 0 then
+        return { severity = "urgent", count = total, label = label, segments = segments }
+    end
+    return { severity = "attention", count = total, label = label, segments = segments }
+end
+
+-- Read cached result from the background refresh script.
+local function readCache()
     local f = io.open(CACHE_FILE, "r")
-    if f then
-        local content = f:read("*all")
-        f:close()
-        if content and content ~= "" then
-            local data = hs.json.decode(content)
-            if data and not data.error then
-                local people = data.people or 0
-                local meetings = data.meetings or 0
-                local channels = data.channels or 0
-                local total = people + meetings + channels
+    if not f then return nil end
+    local content = f:read("*all")
+    f:close()
+    if not content or content == "" then return nil end
 
-                if total == 0 then
-                    return { severity = "none", count = 0, label = "" }
-                end
+    local ok, data = pcall(hs.json.decode, content)
+    if not ok or not data or data.error then return nil end
 
-                local parts = {}
-                local segments = {}
-                if meetings > 0 then
-                    table.insert(parts, meetings .. " mtg")
-                    table.insert(segments, { text = meetings .. " mtg", color = "amber" })
-                end
-                if people > 0 then
-                    table.insert(parts, people .. " dm")
-                    table.insert(segments, { text = people .. " dm", color = "red" })
-                end
-                if channels > 0 then
-                    table.insert(parts, channels .. " ch")
-                    table.insert(segments, { text = channels .. " ch", color = "amber" })
-                end
-                local label = table.concat(parts, " ")
+    return buildResult(data.people or 0, data.meetings or 0, data.channels or 0)
+end
 
-                if people > 0 then
-                    return { severity = "urgent", count = total, label = label, segments = segments }
-                end
-                return { severity = "attention", count = total, label = label, segments = segments }
-            end
-        end
-    end
-
-    -- Fallback: dock badge (fast AX read)
+-- Fallback: read the dock badge for Teams via AXUIElement traversal.
+local function readDockBadge()
     local dockApp = hs.application.find("Dock")
-    if not dockApp then return { severity = "none", count = 0, label = "" } end
+    if not dockApp then return nil end
     local dockElem = hs.axuielement.applicationElement(dockApp)
-    if not dockElem then return { severity = "none", count = 0, label = "" } end
+    if not dockElem then return nil end
     local children = dockElem:attributeValue("AXChildren")
-    if not children then return { severity = "none", count = 0, label = "" } end
+    if not children then return nil end
+
+    -- Find the AXList (the dock icons row)
     local dockList = nil
     for _, child in ipairs(children) do
-        if child:attributeValue("AXRole") == "AXList" then dockList = child; break end
+        if child:attributeValue("AXRole") == "AXList" then
+            dockList = child
+            break
+        end
     end
-    if not dockList then return { severity = "none", count = 0, label = "" } end
+    if not dockList then return nil end
+
+    -- Find the Teams icon and read its status badge
     local items = dockList:attributeValue("AXChildren")
-    if not items then return { severity = "none", count = 0, label = "" } end
+    if not items then return nil end
     for _, item in ipairs(items) do
         local title = item:attributeValue("AXTitle")
         if title and tostring(title) == "Microsoft Teams" then
@@ -86,6 +86,27 @@ function teams.getAttention()
             break
         end
     end
+    return nil
+end
+
+function teams.getAttention()
+    -- Use bundle ID to find the main Teams app, not the background agent process
+    local app = hs.application.get("com.microsoft.teams2")
+    if not app then
+        return { severity = "unreadable", count = 0, label = "not running" }
+    end
+    -- Verify it's the main app (has a window), not just the background agent
+    if not app:mainWindow() then
+        return { severity = "unreadable", count = 0, label = "not running" }
+    end
+
+    -- Try cache first (instant file I/O), fall back to dock badge
+    local result = readCache()
+    if result then return result end
+
+    result = readDockBadge()
+    if result then return result end
+
     return { severity = "none", count = 0, label = "" }
 end
 

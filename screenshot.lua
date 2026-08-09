@@ -4,19 +4,15 @@
 -- it leaves the image on the clipboard.
 local screenshot = {}
 
+local KEYSTROKE_DELAY = 200000  -- microseconds (200ms) so macOS reliably picks up the shortcut
+local WINDOW_MODE_DELAY = 0.3   -- seconds to wait before pressing Space for window mode
+
 local function triggerScreenshot(modifiers, key)
-    -- Increase delay so macOS reliably picks up the shortcut
-    hs.eventtap.keyStroke(modifiers, key, 200000)
+    hs.eventtap.keyStroke(modifiers, key, KEYSTROKE_DELAY)
 end
 
 function screenshot.copyToClipboard()
     -- Cmd+Ctrl+Shift+4: capture selected area to clipboard
-    triggerScreenshot({"cmd", "ctrl", "shift"}, "4")
-end
-
-function screenshot.saveToFile()
-    -- Same as copyToClipboard — clipboard is the default; user can save
-    -- via the floating thumbnail's Markup if they want.
     triggerScreenshot({"cmd", "ctrl", "shift"}, "4")
 end
 
@@ -29,7 +25,7 @@ end
 function screenshot.window()
     -- Start area capture then immediately switch to window mode with Space
     triggerScreenshot({"cmd", "ctrl", "shift"}, "4")
-    hs.timer.doAfter(0.3, function()
+    hs.timer.doAfter(WINDOW_MODE_DELAY, function()
         hs.eventtap.keyStroke({}, "space")
     end)
 end

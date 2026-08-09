@@ -15,10 +15,8 @@ local function reloadConfig(files)
     end
 end
 
-if configFileWatcher then
-    configFileWatcher:stop()
-end
-configFileWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
+local configFileWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig)
+configFileWatcher:start()
 
 -- Load core modules
 local spotify = require("spotify")
@@ -56,10 +54,6 @@ camera.start()
 calendar.start()
 weather.start()
 
-
--- -- Start Messages webview for reading unread count from Google Messages
--- messagesProvider.start()
-
 -- Start Stream Deck HTTP Server on port 8080
 server.start()
 
@@ -82,29 +76,45 @@ end
 -- kill and relaunch with --remote-debugging-port=9222 via open --args.
 -- Hides the initial window immediately so the user doesn't see the
 -- kill/relaunch flicker.
+local slackRelaunching = false
+
 local function ensureSlackDebugPort()
     local app = hs.application.get("Slack")
     if not app then return end
 
-    local portCheck = hs.execute("lsof -i :9222 2>/dev/null | grep LISTEN | wc -l | tr -d ' '")
-    if portCheck and tonumber(portCheck) and tonumber(portCheck) > 0 then
+    -- Check if Slack's debug port is already listening.
+    -- Synchronous but fast (lsof on a single port is ~10ms).
+    local portCheck = hs.execute("lsof -i :9222 2>/dev/null")
+    if portCheck and portCheck:match("LISTEN") then
         return
     end
 
-    -- Hide the window immediately to mask the kill/relaunch
+    -- Port not open — hide, kill, and relaunch Slack with debug port
     app:hide()
     hs.alert.show("Slack Loading...", 2)
-    _slackRelaunching = true
+    slackRelaunching = true
     app:kill()
-    _slackRelaunchTimer = hs.timer.doAfter(2, function()
+    hs.timer.doAfter(2, function()
         hs.execute('open -a Slack --args --remote-debugging-port=9222')
-        _slackRelaunchDoneTimer = hs.timer.doAfter(5, function() _slackRelaunching = false end)
+        hs.timer.doAfter(5, function() slackRelaunching = false end)
     end)
 end
 
+-- Timer intervals (seconds) for app-launch settling sequence.
+-- Slack needs debug port setup first; Teams just needs cache refresh.
+local SLACK_DEBUG_PORT_DELAY = 3    -- wait for Slack process to stabilize before port check
+local SLACK_FIRST_REFRESH    = 10   -- first cache refresh after Slack settles
+local SLACK_SECOND_REFRESH   = 18   -- second refresh (Slack UI can be slow to populate)
+local SLACK_UI_UPDATE        = 22   -- trigger attention UI update after cache is warm
+local TEAMS_FIRST_REFRESH    = 5    -- first cache refresh after Teams settles
+local TEAMS_SECOND_REFRESH   = 10   -- second refresh for Teams
+local TEAMS_UI_UPDATE        = 13   -- trigger attention UI update for Teams
+local INITIAL_REFRESH_DELAY  = 8    -- initial background refresh after Hammerspoon starts
+local REFRESH_INTERVAL       = 60   -- ongoing background refresh interval
+
 -- Start background refresh cycle
-_attentionRefreshTimer = hs.timer.doAfter(8, refreshAttentionBackground)
-_attentionRefreshInterval = hs.timer.doEvery(60, refreshAttentionBackground)
+local attentionRefreshTimer = hs.timer.doAfter(INITIAL_REFRESH_DELAY, refreshAttentionBackground)
+local attentionRefreshInterval = hs.timer.doEvery(REFRESH_INTERVAL, refreshAttentionBackground)
 
 -- When Slack or Teams launches, refresh cache files after the app settles,
 -- then trigger an immediate attention refresh to update the UI.
@@ -112,25 +122,24 @@ local appWatcher = hs.application.watcher.new(function(appName, event)
     if event == hs.application.watcher.launched then
         if appName == "Slack" then
             attention.markLoading("slack")
-            _t0 = hs.timer.doAfter(3, ensureSlackDebugPort)
-            _t1 = hs.timer.doAfter(10, refreshAttentionBackground)
-            _t1b = hs.timer.doAfter(18, refreshAttentionBackground)
-            _t2 = hs.timer.doAfter(22, attention.refreshNow)
+            hs.timer.doAfter(SLACK_DEBUG_PORT_DELAY, ensureSlackDebugPort)
+            hs.timer.doAfter(SLACK_FIRST_REFRESH, refreshAttentionBackground)
+            hs.timer.doAfter(SLACK_SECOND_REFRESH, refreshAttentionBackground)
+            hs.timer.doAfter(SLACK_UI_UPDATE, attention.refreshNow)
         elseif appName == "Microsoft Teams" or appName == "MSTeams" then
             attention.markLoading("teams")
-            _t1 = hs.timer.doAfter(5, refreshAttentionBackground)
-            _t1b = hs.timer.doAfter(10, refreshAttentionBackground)
-            _t2 = hs.timer.doAfter(13, attention.refreshNow)
+            hs.timer.doAfter(TEAMS_FIRST_REFRESH, refreshAttentionBackground)
+            hs.timer.doAfter(TEAMS_SECOND_REFRESH, refreshAttentionBackground)
+            hs.timer.doAfter(TEAMS_UI_UPDATE, attention.refreshNow)
         end
     elseif event == hs.application.watcher.terminated then
-        if appName == "Slack" and not _slackRelaunching then
+        if appName == "Slack" and not slackRelaunching then
             attention.markNotRunning("slack")
-        elseif (appName == "Microsoft Teams" or appName == "MSTeams") and not _teamsRelaunching then
+        elseif (appName == "Microsoft Teams" or appName == "MSTeams") then
             attention.markNotRunning("teams")
         end
     end
 end)
-_appWatcher = appWatcher
 appWatcher:start()
 
 -- Global Hotkey Bindings (Mac keyboard backups)

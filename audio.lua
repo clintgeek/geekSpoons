@@ -1,6 +1,8 @@
 -- audio.lua: Master macOS system audio & microphone device switcher
 local audio = {}
 
+local VOLUME_STEP = 5  -- percent change per volume up/down press
+
 function audio.getDefaultOutput()
     return hs.audiodevice.defaultOutputDevice()
 end
@@ -39,7 +41,7 @@ function audio.volumeUp()
     local dev = audio.getDefaultOutput()
     if dev then
         local cur = dev:volume() or 0
-        local nxt = math.min(100, cur + 5)
+        local nxt = math.min(100, cur + VOLUME_STEP)
         dev:setVolume(nxt)
         return nxt
     end
@@ -50,7 +52,7 @@ function audio.volumeDown()
     local dev = audio.getDefaultOutput()
     if dev then
         local cur = dev:volume() or 0
-        local nxt = math.max(0, cur - 5)
+        local nxt = math.max(0, cur - VOLUME_STEP)
         dev:setVolume(nxt)
         return nxt
     end

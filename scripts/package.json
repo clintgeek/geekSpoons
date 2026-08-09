@@ -2,6 +2,7 @@
   "dependencies": {
     "ical": "^0.8.0",
     "luxon": "^3.7.2",
+    "node-ical": "^0.27.1",
     "rrule": "^2.8.1",
     "ws": "^8.21.3"
   }

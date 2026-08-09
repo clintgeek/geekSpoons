@@ -1,22 +1,11 @@
 #!/usr/bin/env node
 
 const https = require('https');
+const ical = require('node-ical');
 const { DateTime } = require('luxon');
 
 const url = process.argv[2];
 const LOCAL_TZ = 'America/Chicago';
-
-const TZ_MAP = {
-    'Pacific Standard Time': 'America/Los_Angeles',
-    'Central Standard Time': 'America/Chicago',
-    'Eastern Standard Time': 'America/New_York',
-    'Mountain Standard Time': 'America/Denver',
-    'Mountain Daylight Time': 'America/Denver',
-    'Central Daylight Time': 'America/Chicago',
-    'Eastern Daylight Time': 'America/New_York',
-    'Pacific Daylight Time': 'America/Los_Angeles',
-    'UTC': 'UTC'
-};
 
 function fetchIcs(u) {
     return new Promise((resolve, reject) => {
@@ -36,69 +25,8 @@ function fetchIcs(u) {
     });
 }
 
-function parseICS(text) {
-    const lines = text.split(/\r?\n/);
-    const events = [];
-    let current = null;
-    let inEvent = false;
-
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        
-        while (i + 1 < lines.length && (lines[i + 1].startsWith(' ') || lines[i + 1].startsWith('\t'))) {
-            line += lines[++i].substring(1);
-        }
-
-        if (line === 'BEGIN:VEVENT') {
-            inEvent = true;
-            current = { properties: {} };
-        } else if (line === 'END:VEVENT' && inEvent) {
-            if (current) events.push(current);
-            current = null;
-            inEvent = false;
-        } else if (inEvent && current) {
-            const colonIdx = line.indexOf(':');
-            if (colonIdx > 0) {
-                const fullKey = line.substring(0, colonIdx);
-                const value = line.substring(colonIdx + 1);
-                
-                const [key, ...params] = fullKey.split(';');
-                const paramObj = {};
-                params.forEach(p => {
-                    const [pk, pv] = p.split('=');
-                    if (pk && pv) paramObj[pk] = pv;
-                });
-
-                current.properties[key] = { value, params: paramObj };
-            }
-        }
-    }
-    return events;
-}
-
-function parseDateTime(dtStr, tzid) {
-    if (!dtStr) return null;
-    
-    const isUTC = dtStr.endsWith('Z');
-    const clean = dtStr.replace('Z', '');
-    
-    const year = parseInt(clean.substring(0, 4), 10);
-    const month = parseInt(clean.substring(4, 6), 10);
-    const day = parseInt(clean.substring(6, 8), 10);
-    const hour = parseInt(clean.substring(9, 11), 10) || 0;
-    const minute = parseInt(clean.substring(11, 13), 10) || 0;
-    const second = parseInt(clean.substring(13, 15), 10) || 0;
-
-    if (isUTC) {
-        return DateTime.fromObject({ year, month, day, hour, minute, second }, { zone: 'UTC' });
-    }
-
-    const zone = TZ_MAP[tzid] || tzid || LOCAL_TZ;
-    return DateTime.fromObject({ year, month, day, hour, minute, second }, { zone });
-}
-
-function findMeetingUrl(desc, loc) {
-    const text = (desc || '') + '\n' + (loc || '');
+function findMeetingUrl(ev) {
+    const text = (ev.description || '') + '\n' + (ev.location || '');
     const m = text.match(/(https?:\/\/[^\s<>\)\]\n\r]+)/);
     if (!m) return null;
     return m[1].replace(/[<>\)\]].*$/, '');
@@ -113,111 +41,48 @@ function meetingType(u) {
     return 'Meeting';
 }
 
-function parseRRule(rruleStr) {
-    if (!rruleStr) return null;
-    const parts = {};
-    rruleStr.split(';').forEach(p => {
-        const [k, v] = p.split('=');
-        if (k && v) parts[k] = v;
-    });
-    return parts;
-}
-
-function expandRecurrence(dtStart, rrule, limit = 50) {
-    const freq = rrule.FREQ;
-    if (!freq) return [dtStart];
-
-    const interval = parseInt(rrule.INTERVAL || '1', 10);
-    const count = parseInt(rrule.COUNT || '100', 10);
-    const until = rrule.UNTIL ? parseDateTime(rrule.UNTIL) : null;
-
-    const occurrences = [dtStart];
-    let current = dtStart;
-
-    for (let i = 1; i < Math.min(count, limit); i++) {
-        if (freq === 'DAILY') {
-            current = current.plus({ days: interval });
-        } else if (freq === 'WEEKLY') {
-            current = current.plus({ weeks: interval });
-        } else if (freq === 'MONTHLY') {
-            current = current.plus({ months: interval });
-        } else if (freq === 'YEARLY') {
-            current = current.plus({ years: interval });
-        } else {
-            break;
-        }
-
-        if (until && current > until) break;
-        occurrences.push(current);
-    }
-
-    return occurrences;
-}
-
 async function main() {
     try {
         const ics = await fetchIcs(url);
-        const events = parseICS(ics);
-        const now = DateTime.now().setZone(LOCAL_TZ);
+        const parsed = ical.parseICS(ics);
+        const now = new Date();
         const candidates = [];
 
-        for (const ev of events) {
-            const summary = ev.properties.SUMMARY?.value || 'Untitled';
-            const dtStartProp = ev.properties.DTSTART;
-            const dtEndProp = ev.properties.DTEND;
-            const rruleProp = ev.properties.RRULE;
-            const desc = ev.properties.DESCRIPTION?.value || '';
-            const loc = ev.properties.LOCATION?.value || '';
+        for (const [key, ev] of Object.entries(parsed)) {
+            if (ev.type !== 'VEVENT' || !ev.start) continue;
 
-            if (!dtStartProp) continue;
+            const start = ev.start;
+            const end = ev.end || new Date(start.getTime() + 60 * 60 * 1000);
 
-            const tzid = dtStartProp.params.TZID;
-            const baseStart = parseDateTime(dtStartProp.value, tzid);
-            const baseEnd = dtEndProp ? parseDateTime(dtEndProp.value, dtEndProp.params.TZID || tzid) : baseStart.plus({ hours: 1 });
+            if (end < now) continue;
 
-            if (!baseStart || !baseEnd) continue;
-
-            const duration = baseEnd.diff(baseStart);
-            const rrule = rruleProp ? parseRRule(rruleProp.value) : null;
-
-            let occurrences = [baseStart];
-            if (rrule) {
-                occurrences = expandRecurrence(baseStart, rrule);
-            }
-
-            for (const occ of occurrences) {
-                const start = occ.setZone(LOCAL_TZ);
-                const end = start.plus(duration);
-
-                if (end < now) continue;
-
-                const joinURL = findMeetingUrl(desc, loc);
-                candidates.push({
-                    title: summary,
-                    start: start.toISO(),
-                    end: end.toISO(),
-                    duration: Math.round(duration.as('minutes')),
-                    source: 'Work',
-                    meeting: !!joinURL,
-                    meetingType: meetingType(joinURL),
-                    joinURL
-                });
-            }
+            const joinURL = findMeetingUrl(ev);
+            candidates.push({
+                title: ev.summary || 'Untitled',
+                start: start.toISOString(),
+                end: end.toISOString(),
+                duration: Math.round((end - start) / 60000),
+                source: 'Work',
+                meeting: !!joinURL,
+                meetingType: meetingType(joinURL),
+                joinURL
+            });
         }
 
         candidates.sort((a, b) => new Date(a.start) - new Date(b.start));
 
+        // Find current meeting (in progress) or next upcoming
         let selected = null;
         for (const c of candidates) {
-            const s = DateTime.fromISO(c.start);
-            const e = DateTime.fromISO(c.end);
+            const s = new Date(c.start);
+            const e = new Date(c.end);
             if (s <= now && now < e) {
                 selected = c;
                 break;
             }
         }
         if (!selected) {
-            selected = candidates.find(c => DateTime.fromISO(c.start) >= now) || null;
+            selected = candidates.find(c => new Date(c.start) >= now) || null;
         }
 
         if (!selected) {

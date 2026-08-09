@@ -4,6 +4,7 @@
 const WebSocket = require(require('path').join(__dirname, 'node_modules', 'ws'));
 
 const DEBUG_PORT = 9223;
+const TIMEOUT_MS = 5000;  // give up if Teams doesn't respond in 5 seconds
 
 function checkTreeItemCount(wsUrl) {
     return new Promise((resolve, reject) => {
@@ -126,7 +127,7 @@ async function getUnreadCount() {
         console.log(JSON.stringify({error: err.message, people: 0, meetings: 0, channels: 0}));
     });
 
-    setTimeout(() => { ws.close(); process.exit(0); }, 5000);
+    setTimeout(() => { ws.close(); process.exit(0); }, TIMEOUT_MS);
 }
 
 getUnreadCount().catch(e => console.log(JSON.stringify({error: e.message, people: 0, meetings: 0, channels: 0})));

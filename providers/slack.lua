@@ -74,7 +74,6 @@ function slack.getAttention()
         end
         return { severity = "none", count = 0, label = "" }
     end
-
     return { severity = "unreadable", count = 0, label = "no data" }
 end
 

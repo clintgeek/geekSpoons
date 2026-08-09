@@ -69,8 +69,8 @@ function attention.refreshNow()
                 f:close()
                 -- Check if the cache file has real data (no error field)
                 if content and content ~= "" then
-                    local data = hs.json.decode(content)
-                    if data and not data.error then
+                    local ok, data = pcall(hs.json.decode, content)
+                    if ok and data and not data.error then
                         valid = true
                     end
                 end
@@ -88,7 +88,7 @@ end
 -- Initial refresh is deferred so it doesn't block init.lua loading.
 function attention.start()
     if refreshTimer then refreshTimer:stop() end
-    _attentionInitialTimer = hs.timer.doAfter(3, refresh)
+    local initialTimer = hs.timer.doAfter(3, refresh)
     refreshTimer = hs.timer.doEvery(REFRESH_INTERVAL, refresh)
 end
 
