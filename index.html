@@ -254,64 +254,6 @@
             overflow: hidden;
         }
 
-        .attention-bar {
-            display: none;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 14px;
-            margin: 0 12px 0;
-            background: linear-gradient(90deg, rgba(214,167,58,0.10), rgba(214,167,58,0.04));
-            border: 1px solid rgba(214,167,58,0.30);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .attention-bar.active { display: flex; }
-        .attention-bar.urgent {
-            background: linear-gradient(90deg, rgba(229,72,77,0.12), rgba(229,72,77,0.04));
-            border-color: rgba(229,72,77,0.40);
-        }
-
-        .attention-bar:hover {
-            background: linear-gradient(90deg, rgba(214,167,58,0.16), rgba(214,167,58,0.06));
-        }
-        .attention-bar.urgent:hover {
-            background: linear-gradient(90deg, rgba(229,72,77,0.18), rgba(229,72,77,0.06));
-        }
-
-        .attention-bar-left {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--amber);
-            letter-spacing: 0.04em;
-        }
-
-        .attention-bar.urgent .attention-bar-left { color: var(--red); }
-
-        .attention-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--amber);
-            box-shadow: 0 0 8px var(--amber);
-        }
-
-        .attention-bar.urgent .attention-dot {
-            background: var(--red);
-            box-shadow: 0 0 8px var(--red);
-        }
-
-        .attention-bar-right {
-            font-family: 'SF Mono', Menlo, Consolas, monospace;
-            font-size: 10px;
-            color: var(--text-secondary);
-            letter-spacing: 0.04em;
-        }
-
         .col {
             display: flex;
             flex-direction: column;
@@ -392,9 +334,9 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 5px;
             cursor: pointer;
-            padding: 10px;
+            padding: 6px;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,0.2);
             transition: all 0.12s ease;
         }
@@ -445,9 +387,9 @@
         .meeting-control.blocked .meeting-label { color: var(--red); }
 
         .meeting-icon {
-            width: 32px;
-            height: 32px;
-            font-size: 32px;
+            width: 28px;
+            height: 28px;
+            font-size: 28px;
             color: var(--text-secondary);
             display: flex;
             align-items: center;
@@ -458,7 +400,7 @@
             font-size: 11px;
             font-weight: 700;
             color: var(--text-primary);
-            letter-spacing: 0.08em;
+            letter-spacing: 0.06em;
             text-align: center;
         }
 
@@ -507,9 +449,9 @@
         .audio-field.muted .audio-label { color: var(--red); }
 
         .audio-icon {
-            width: 28px;
-            height: 28px;
-            font-size: 28px;
+            width: 26px;
+            height: 26px;
+            font-size: 26px;
             color: var(--text-secondary);
             display: flex;
             align-items: center;
@@ -517,7 +459,7 @@
         }
 
         .audio-label {
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 700;
             color: var(--text-primary);
             text-align: center;
@@ -527,7 +469,7 @@
         }
 
         .audio-value {
-            font-size: 10px;
+            font-size: 9px;
             color: var(--text-secondary);
             text-align: center;
         }
@@ -536,7 +478,7 @@
         .capture-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr;
+            grid-template-rows: 100px;
             gap: 10px;
             flex: 1;
             align-items: stretch;
@@ -551,20 +493,82 @@
             align-items: stretch;
         }
 
+        /* --- AI USAGE --- */
+        .ai-usage-panel {
+            flex: 0;
+            min-height: fit-content;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .ai-usage-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--panel-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px 10px;
+        }
+
+        .ai-usage-row.unavailable {
+            opacity: 0.6;
+        }
+
+        .ai-usage-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex: 0 0 7px;
+        }
+
+        .ai-usage-name {
+            font-size: 8px;
+            font-weight: 800;
+            color: var(--text-secondary);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            min-width: 95px;
+            width: 95px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ai-usage-amount {
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 10px;
+            color: var(--text-primary);
+            flex: 1;
+            text-align: right;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .panel-small {
             flex: 0;
             min-height: fit-content;
         }
 
-        .meeting-panel { flex: 1; }
+        .meeting-panel {
+            flex: 1;
+            min-height: 220px;
+        }
 
-        .audio-field,
-        .capture-control,
-        .placeholder-grid .capture-control {
-            min-height: 110px;
+        .capture-panel {
+            flex: 0;
+            min-height: fit-content;
+        }
+
+        .audio-field {
+            min-height: 100px;
         }
 
         .capture-control {
+            min-height: 110px;
             background: linear-gradient(to bottom, #121821, #0D1219);
             border: 1px solid var(--border);
             border-radius: var(--radius-control);
@@ -609,9 +613,9 @@
         }
 
         .capture-icon {
-            width: 22px;
-            height: 22px;
-            font-size: 22px;
+            width: 26px;
+            height: 26px;
+            font-size: 26px;
             color: var(--text-secondary);
             display: flex;
             align-items: center;
@@ -623,7 +627,7 @@
         }
 
         .capture-primary {
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
             color: var(--text-secondary);
             letter-spacing: 0.03em;
@@ -1227,43 +1231,6 @@
             color: var(--bg-primary);
         }
 
-        /* --- ATTENTION MODAL --- */
-        .attention-modal-body {
-            padding: 12px;
-            display: grid;
-            gap: 6px;
-        }
-
-        .attention-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 14px;
-            background: var(--panel-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-control);
-            color: var(--text-primary);
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        .attention-row-label {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .attention-row-count {
-            font-family: 'SF Mono', Menlo, Consolas, monospace;
-            font-size: 11px;
-            color: var(--text-muted);
-        }
-
-        .attention-row.amber { border-color: rgba(214,167,58,0.35); }
-        .attention-row.amber .attention-row-count { color: var(--amber); }
-        .attention-row.red { border-color: rgba(229,72,77,0.40); }
-        .attention-row.red .attention-row-count { color: var(--red); }
-
         /* Responsive height for meeting controls */
         @media (max-height: 800px) {
             .track-name { font-size: 28px; }
@@ -1273,20 +1240,12 @@
     </style>
 </head>
 <body>
-    <div id="attentionBar" class="attention-bar" onclick="toggleAttentionModal()">
-        <div class="attention-bar-left">
-            <span class="attention-dot"></span>
-            <span id="attentionSummary">0 things need your attention</span>
-        </div>
-        <div class="attention-bar-right" id="attentionDetail"></div>
-    </div>
-
     <!-- MAIN WORKSPACE -->
     <div class="workspace">
         <!-- LEFT COLUMN -->
         <div class="col">
             <!-- MEETING CONTROLS -->
-            <div class="panel flex-1">
+            <div class="panel meeting-panel">
                 <div class="meeting-grid">
                     <div class="meeting-control live" id="micBtn" onclick="triggerAction('mute_toggle')">
                         <div class="meeting-icon"><i class="ph-bold ph-microphone"></i></div>
@@ -1326,7 +1285,7 @@
             </div>
 
             <!-- SCREEN CAPTURE -->
-            <div class="panel panel-small">
+            <div class="panel capture-panel">
                 <div class="capture-grid">
                     <div class="capture-control" onclick="triggerAction('snap_selection')">
                         <div class="capture-icon"><i class="ph-bold ph-crop"></i></div>
@@ -1339,23 +1298,8 @@
                 </div>
             </div>
 
-            <!-- PLACEHOLDER CONTROLS -->
-            <div class="panel panel-small">
-                <div class="placeholder-grid">
-                    <div class="capture-control blank">
-                        <div class="capture-primary">1</div>
-                    </div>
-                    <div class="capture-control blank">
-                        <div class="capture-primary">2</div>
-                    </div>
-                    <div class="capture-control blank">
-                        <div class="capture-primary">3</div>
-                    </div>
-                    <div class="capture-control blank">
-                        <div class="capture-primary">4</div>
-                    </div>
-                </div>
-            </div>
+            <!-- AI USAGE -->
+            <div class="panel panel-small ai-usage-panel" id="aiUsagePanel"></div>
         </div>
 
         <!-- RIGHT COLUMN -->
@@ -1706,6 +1650,27 @@
                     if (data.attention) {
                         mergeAttention(data.attention);
                     }
+
+                    // AI Usage
+                    if (data.aiUsage) {
+                        const panel = document.getElementById('aiUsagePanel');
+                        panel.innerHTML = '';
+
+                        for (const u of data.aiUsage) {
+                            const row = document.createElement('div');
+                            row.className = 'ai-usage-row' + (u.available ? '' : ' unavailable');
+
+                            const color = u.color || (u.available ? 'var(--green)' : 'var(--text-muted)');
+                            const amount = u.available ? (u.display || '—') : (u.error || '—');
+
+                            row.innerHTML = `
+                                <div class="ai-usage-dot" style="background: ${color};"></div>
+                                <div class="ai-usage-name">${(u.label || '—')}</div>
+                                <div class="ai-usage-amount">${amount}</div>
+                            `;
+                            panel.appendChild(row);
+                        }
+                    }
                 })
                 .catch(err => console.log('Status error:', err));
         }
@@ -1732,9 +1697,6 @@
 
         function updateAttention(state) {
             const tiles = document.querySelectorAll('.app-launcher[data-app-id]');
-            let totalAttention = 0;
-            let totalUrgent = 0;
-            const detailParts = [];
 
             tiles.forEach(tile => {
                 const appId = tile.dataset.appId;
@@ -1767,10 +1729,8 @@
 
                 if (info.severity === 'urgent') {
                     tile.classList.add('urgent');
-                    totalUrgent++;
                 } else {
                     tile.classList.add('attention');
-                    totalAttention++;
                 }
 
                 badge.textContent = info.count > 99 ? '99+' : info.count;
@@ -1783,45 +1743,7 @@
                 } else {
                     sublabel.textContent = info.label || '';
                 }
-                detailParts.push({ name: appId, count: info.count, label: info.label || '', severity: info.severity });
             });
-
-            const bar = document.getElementById('attentionBar');
-            const total = totalAttention + totalUrgent;
-            if (total > 0) {
-                bar.classList.add('active');
-                bar.classList.toggle('urgent', totalUrgent > 0);
-                document.getElementById('attentionSummary').textContent =
-                    total + ' thing' + (total > 1 ? 's' : '') + ' need your attention';
-                document.getElementById('attentionDetail').textContent =
-                    detailParts.map(p => p.name + ' ' + p.count).join('  ·  ');
-            } else {
-                bar.classList.remove('active', 'urgent');
-            }
-
-            // Store for modal
-            window._attentionDetail = detailParts;
-        }
-
-        function toggleAttentionModal() {
-            const modal = document.getElementById('attentionModal');
-            const body = document.getElementById('attentionModalBody');
-            const parts = window._attentionDetail || [];
-
-            if (parts.length === 0) {
-                body.innerHTML = '<div class="attention-row"><span class="attention-row-label">Nothing needs attention</span></div>';
-            } else {
-                body.innerHTML = parts.map(p => {
-                    const cls = p.severity === 'urgent' ? 'red' : 'amber';
-                    const capName = p.name.charAt(0).toUpperCase() + p.name.slice(1);
-                    return '<div class="attention-row ' + cls + '">' +
-                        '<span class="attention-row-label">' + capName + '</span>' +
-                        '<span class="attention-row-count">' + p.label + '</span>' +
-                    '</div>';
-                }).join('');
-            }
-
-            modal.classList.toggle('active');
         }
 
         // Apply default attention state on load; real data comes from status polling
@@ -1885,14 +1807,5 @@
         </div>
     </div>
 
-    <div id="attentionModal" class="modal-overlay" onclick="if(event.target === this) toggleAttentionModal()">
-        <div class="modal">
-            <div class="modal-header">
-                <span>ATTENTION</span>
-                <span class="modal-close" onclick="toggleAttentionModal()">&times;</span>
-            </div>
-            <div class="attention-modal-body" id="attentionModalBody"></div>
-        </div>
-    </div>
 </body>
 </html>
