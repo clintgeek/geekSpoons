@@ -2317,22 +2317,10 @@ elseif path:sub(1, 12) == "/api/action/" then
             hs.timer.doAfter(0, audio.volumeUp)
         elseif action == "audio_voldown" then
             hs.timer.doAfter(0, audio.volumeDown)
-        elseif action == "snap_copy" then
-            hs.timer.doAfter(0, screenshot.copyToClipboard)
-        elseif action == "snap_file" then
-            hs.timer.doAfter(0, screenshot.saveToFile)
         elseif action == "snap_selection" then
             hs.timer.doAfter(0, screenshot.selection)
-        elseif action == "snap_window" then
-            hs.timer.doAfter(0, screenshot.window)
-        elseif action == "snap_fullscreen" then
-            hs.timer.doAfter(0, screenshot.fullscreen)
-        elseif action == "record_area" then
-            hs.timer.doAfter(0, record.area)
-        elseif action == "record_window" then
-            hs.timer.doAfter(0, record.window)
-        elseif action == "record_fullscreen" then
-            hs.timer.doAfter(0, record.fullscreen)
+        elseif action == "record_screen" then
+            hs.timer.doAfter(0, record.screen)
         elseif action == "app_chrome" then
             hs.timer.doAfter(0, function() apps.smartLaunch("chrome") end)
         elseif action == "app_messages" then

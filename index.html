@@ -536,17 +536,32 @@
         .capture-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr;
             gap: 10px;
             flex: 1;
             align-items: stretch;
         }
 
-        .capture-section {
+        .placeholder-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1.25fr 1fr;
-            gap: 8px;
-            min-width: 0;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: 1fr;
+            gap: 10px;
+            flex: 1;
+            align-items: stretch;
+        }
+
+        .panel-small {
+            flex: 0;
+            min-height: fit-content;
+        }
+
+        .meeting-panel { flex: 1; }
+
+        .audio-field,
+        .capture-control,
+        .placeholder-grid .capture-control {
+            min-height: 110px;
         }
 
         .capture-control {
@@ -565,8 +580,21 @@
             min-height: 0;
         }
 
-        .capture-section .capture-control:first-child {
-            grid-column: 1 / -1;
+        .capture-control.blank {
+            background: linear-gradient(to bottom, #0E1319, #0A0E13);
+            border: 1px dashed var(--border);
+            cursor: default;
+            opacity: 0.6;
+        }
+
+        .capture-control.blank:hover {
+            background: linear-gradient(to bottom, #0E1319, #0A0E13);
+            border-color: var(--border);
+        }
+
+        .capture-control.blank:active {
+            transform: none;
+            box-shadow: none;
         }
 
         .capture-control:hover {
@@ -1276,7 +1304,7 @@
             </div>
 
             <!-- MACOS AUDIO & MIC DEVICES -->
-            <div class="panel flex-1">
+            <div class="panel panel-small">
                 <div class="audio-grid">
                     <div class="audio-field" id="audioOutputBtn" onclick="triggerAction('audio_cycle')">
                         <div class="audio-icon"><i class="ph-bold ph-speaker-hifi"></i></div>
@@ -1298,35 +1326,33 @@
             </div>
 
             <!-- SCREEN CAPTURE -->
-            <div class="panel flex-1">
+            <div class="panel panel-small">
                 <div class="capture-grid">
-                    <div class="capture-section">
-                        <div class="capture-control" onclick="triggerAction('snap_selection')">
-                            <div class="capture-icon"><i class="ph-bold ph-crop"></i></div>
-                            <div class="capture-primary">Screenshot Selection</div>
-                        </div>
-                        <div class="capture-control" onclick="triggerAction('snap_window')">
-                            <div class="capture-icon"><i class="ph-bold ph-app-window"></i></div>
-                            <div class="capture-primary">Screenshot Window</div>
-                        </div>
-                        <div class="capture-control" onclick="triggerAction('snap_fullscreen')">
-                            <div class="capture-icon"><i class="ph-bold ph-monitor"></i></div>
-                            <div class="capture-primary">Screenshot Fullscreen</div>
-                        </div>
+                    <div class="capture-control" onclick="triggerAction('snap_selection')">
+                        <div class="capture-icon"><i class="ph-bold ph-crop"></i></div>
+                        <div class="capture-primary">Screenshot Selection</div>
                     </div>
-                    <div class="capture-section">
-                        <div class="capture-control record" onclick="triggerAction('record_area')">
-                            <div class="capture-icon"><i class="ph-bold ph-record"></i></div>
-                            <div class="capture-primary">Record Area</div>
-                        </div>
-                        <div class="capture-control record" onclick="triggerAction('record_window')">
-                            <div class="capture-icon"><i class="ph-bold ph-app-window"></i></div>
-                            <div class="capture-primary">Record Window</div>
-                        </div>
-                        <div class="capture-control record" onclick="triggerAction('record_fullscreen')">
-                            <div class="capture-icon"><i class="ph-bold ph-monitor"></i></div>
-                            <div class="capture-primary">Record Fullscreen</div>
-                        </div>
+                    <div class="capture-control record" onclick="triggerAction('record_screen')">
+                        <div class="capture-icon"><i class="ph-bold ph-record"></i></div>
+                        <div class="capture-primary">Record Screen</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PLACEHOLDER CONTROLS -->
+            <div class="panel panel-small">
+                <div class="placeholder-grid">
+                    <div class="capture-control blank">
+                        <div class="capture-primary">1</div>
+                    </div>
+                    <div class="capture-control blank">
+                        <div class="capture-primary">2</div>
+                    </div>
+                    <div class="capture-control blank">
+                        <div class="capture-primary">3</div>
+                    </div>
+                    <div class="capture-control blank">
+                        <div class="capture-primary">4</div>
                     </div>
                 </div>
             </div>
