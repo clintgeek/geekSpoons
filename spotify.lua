@@ -1,7 +1,22 @@
 -- spotify.lua: Robust Spotify integration module with GEEKAMP v6.78 metadata
 local spotify = {}
 
+local function getSpotifyApp()
+    -- Use hs.application to find Spotify without triggering a launch.
+    -- We also require a main window so we don't talk to an app mid-quit.
+    local app = hs.application.get("Spotify")
+    if app and app:isRunning() and app:mainWindow() then
+        return app
+    end
+    return nil
+end
+
+local function isSpotifyReady()
+    return getSpotifyApp() ~= nil
+end
+
 local function runSpotifyScript(cmd)
+    if not isSpotifyReady() then return nil end
     local script = string.format([[
         tell application "Spotify"
             if it is running then
@@ -15,41 +30,30 @@ local function runSpotifyScript(cmd)
 end
 
 function spotify.isRunning()
-    return hs.spotify.isRunning() or false
-end
-
-local function ensureSpotifyRunning()
-    if not spotify.isRunning() then
-        hs.application.launchOrFocus("Spotify")
-        return false
-    end
-    return true
+    return isSpotifyReady()
 end
 
 function spotify.isPlaying()
-    if not spotify.isRunning() then return false end
-    local res = runSpotifyScript("return (player state is playing)")
-    if res ~= nil then return res end
-    return hs.spotify.isPlaying() or false
+    return runSpotifyScript("return (player state is playing)") or false
 end
 
 function spotify.playPause()
-    if not ensureSpotifyRunning() then return end
+    if not isSpotifyReady() then return end
     runSpotifyScript("playpause")
 end
 
 function spotify.nextTrack()
-    if not ensureSpotifyRunning() then return end
+    if not isSpotifyReady() then return end
     runSpotifyScript("next track")
 end
 
 function spotify.previousTrack()
-    if not ensureSpotifyRunning() then return end
+    if not isSpotifyReady() then return end
     runSpotifyScript("previous track")
 end
 
 function spotify.toggleShuffle()
-    if not ensureSpotifyRunning() then return end
+    if not isSpotifyReady() then return end
     local state = runSpotifyScript("return shuffling")
     local newState = not state
     runSpotifyScript(string.format("set shuffling to %s", tostring(newState)))
@@ -57,7 +61,7 @@ function spotify.toggleShuffle()
 end
 
 function spotify.toggleRepeat()
-    if not ensureSpotifyRunning() then return end
+    if not isSpotifyReady() then return end
     local state = runSpotifyScript("return repeating")
     local newState = not state
     runSpotifyScript(string.format("set repeating to %s", tostring(newState)))
@@ -65,7 +69,7 @@ function spotify.toggleRepeat()
 end
 
 function spotify.likeCurrentTrack()
-    if not ensureSpotifyRunning() then return end
+    if not isSpotifyReady() then return end
     local script = [[
         tell application "Spotify"
             if it is running then
@@ -81,6 +85,7 @@ function spotify.likeCurrentTrack()
 end
 
 function spotify.playURI(uri, contextUri)
+    if not isSpotifyReady() then return end
     local script
     if contextUri and contextUri ~= "" then
         script = string.format('tell application "Spotify" to play track "%s" in context "%s"', uri, contextUri)
@@ -91,12 +96,12 @@ function spotify.playURI(uri, contextUri)
 end
 
 function spotify.getStatus()
-    if not spotify.isRunning() then
+    if not isSpotifyReady() then
         return {
             isRunning = false,
             isPlaying = false,
-            track = "GEEKAMP [PAUSED] - LAUNCH SPOTIFY",
-            artist = "Launch Spotify App",
+            track = "Spotify Not Running",
+            artist = "Open Spotify to play",
             album = "",
             shuffle = false,
             repeatState = false,
@@ -105,10 +110,10 @@ function spotify.getStatus()
         }
     end
 
-    local track = runSpotifyScript("return name of current track") or hs.spotify.getCurrentTrack() or "Unknown Track"
-    local artist = runSpotifyScript("return artist of current track") or hs.spotify.getCurrentArtist() or "Unknown Artist"
-    local album = runSpotifyScript("return album of current track") or hs.spotify.getCurrentAlbum() or ""
-    local playing = spotify.isPlaying()
+    local track = runSpotifyScript("return name of current track") or "Unknown Track"
+    local artist = runSpotifyScript("return artist of current track") or "Unknown Artist"
+    local album = runSpotifyScript("return album of current track") or ""
+    local playing = runSpotifyScript("return (player state is playing)") or false
     local shuffle = runSpotifyScript("return shuffling") or false
     local repeatState = runSpotifyScript("return repeating") or false
     local pos = runSpotifyScript("return player position") or 0
