@@ -12,7 +12,6 @@ local record = require("record")
 local apps = require("apps")
 local attention = require("attention")
 local camera = require("camera")
-local browserUsage = require("browser_usage")
 
 local httpServer = nil
 local port = 8080
@@ -2262,7 +2261,7 @@ local function handleRequest(method, path, headers, body)
             spotify = spotify.getStatus(),
             attention = attention.getStatus(),
             camera = camera.getStatus(),
-            aiUsage = browserUsage.getStatus(),
+
         }
         return jsonResponse(data)
     elseif path == "/api/debug/attention" then

@@ -29,7 +29,6 @@ local record = require("record")
 local apps = require("apps")
 local attention = require("attention")
 local camera = require("camera")
-local browserUsage = require("browser_usage")
 local outlookProvider = require("providers.outlook")
 local slackProvider = require("providers.slack")
 local teamsProvider = require("providers.teams")
@@ -48,8 +47,6 @@ attention.start()
 -- Start background camera status refresh (caches ioreg data every 5s)
 camera.start()
 
--- Start background browser usage refresh (Claude, Antigravity, Devin)
-browserUsage.start()
 
 -- -- Start Messages webview for reading unread count from Google Messages
 -- messagesProvider.start()

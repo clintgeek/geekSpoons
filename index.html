@@ -493,60 +493,6 @@
             align-items: stretch;
         }
 
-        /* --- AI USAGE --- */
-        .ai-usage-panel {
-            flex: 0;
-            min-height: fit-content;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .ai-usage-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--panel-secondary);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 8px 10px;
-        }
-
-        .ai-usage-row.unavailable {
-            opacity: 0.6;
-        }
-
-        .ai-usage-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            flex: 0 0 7px;
-        }
-
-        .ai-usage-name {
-            font-size: 8px;
-            font-weight: 800;
-            color: var(--text-secondary);
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            min-width: 95px;
-            width: 95px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .ai-usage-amount {
-            font-family: 'SF Mono', Menlo, Consolas, monospace;
-            font-size: 10px;
-            color: var(--text-primary);
-            flex: 1;
-            text-align: right;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
 
         .panel-small {
             flex: 0;
@@ -1298,8 +1244,6 @@
                 </div>
             </div>
 
-            <!-- AI USAGE -->
-            <div class="panel panel-small ai-usage-panel" id="aiUsagePanel"></div>
         </div>
 
         <!-- RIGHT COLUMN -->
@@ -1651,26 +1595,7 @@
                         mergeAttention(data.attention);
                     }
 
-                    // AI Usage
-                    if (data.aiUsage) {
-                        const panel = document.getElementById('aiUsagePanel');
-                        panel.innerHTML = '';
 
-                        for (const u of data.aiUsage) {
-                            const row = document.createElement('div');
-                            row.className = 'ai-usage-row' + (u.available ? '' : ' unavailable');
-
-                            const color = u.color || (u.available ? 'var(--green)' : 'var(--text-muted)');
-                            const amount = u.available ? (u.display || '—') : (u.error || '—');
-
-                            row.innerHTML = `
-                                <div class="ai-usage-dot" style="background: ${color};"></div>
-                                <div class="ai-usage-name">${(u.label || '—')}</div>
-                                <div class="ai-usage-amount">${amount}</div>
-                            `;
-                            panel.appendChild(row);
-                        }
-                    }
                 })
                 .catch(err => console.log('Status error:', err));
         }
