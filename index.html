@@ -243,6 +243,20 @@
             fill: currentColor;
         }
 
+        /* --- CONNECTION BANNER --- */
+        .conn-banner {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: var(--red);
+            color: #fff;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 0;
+            z-index: 9999;
+        }
+
         /* --- MAIN WORKSPACE --- */
         .workspace {
             flex: 1;
@@ -1357,6 +1371,7 @@
     </style>
 </head>
 <body>
+    <div class="conn-banner" id="connBanner">CONNECTION LOST — RETRYING</div>
     <!-- MAIN WORKSPACE -->
     <div class="workspace">
         <!-- LEFT COLUMN -->
@@ -1757,17 +1772,26 @@
             } else {
                 meta.textContent = timeFmt(start) + ' · ' + (up.duration || Math.round((end - start) / 60000)) + ' min';
                 const minsUntil = Math.max(0, Math.round((start - now) / 60000));
-                if (minsUntil < 120) {
-                    remaining.textContent = 'in ' + minsUntil + ' min';
-                    remaining.className = 'info-tile-remaining urgent';
-                } else if (minsUntil < 1440) {
-                    const hours = Math.round(minsUntil / 60);
-                    remaining.textContent = 'in ' + hours + ' hour' + (hours !== 1 ? 's' : '');
-                    remaining.className = 'info-tile-remaining soon';
-                } else {
+                if (minsUntil >= 1440) {
+                    // > 24 hours: grey, days
                     const days = Math.round(minsUntil / 1440);
                     remaining.textContent = 'in ' + days + ' day' + (days !== 1 ? 's' : '');
                     remaining.className = 'info-tile-remaining';
+                } else if (minsUntil >= 120) {
+                    // 2-24 hours: yellow, hours
+                    const hours = Math.round(minsUntil / 60);
+                    remaining.textContent = 'in ' + hours + ' hour' + (hours !== 1 ? 's' : '');
+                    remaining.className = 'info-tile-remaining soon';
+                } else if (minsUntil >= 60) {
+                    // 1-2 hours: yellow, hours + minutes
+                    const hours = Math.floor(minsUntil / 60);
+                    const mins = minsUntil % 60;
+                    remaining.textContent = 'in ' + hours + ' hr ' + mins + ' min';
+                    remaining.className = 'info-tile-remaining soon';
+                } else {
+                    // < 1 hour: red, minutes
+                    remaining.textContent = 'in ' + minsUntil + ' min';
+                    remaining.className = 'info-tile-remaining urgent';
                 }
             }
 
@@ -1841,20 +1865,43 @@
         }
 
         // --- Status polling ---
-        function updateStatus() {
+        // Fast poll (1s): mic, camera, audio, spotify — values that change in real time.
+        // Slow poll (10s): attention, calendar, weather — values that change slowly.
+        // This halves request volume for the slow-changing data.
+        let statusFailCount = 0;
+        let slowData = { attention: null, nextUp: null, weather: null };
+
+        function updateStatus(includeSlow) {
             fetch('/api/status')
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
                 .then(data => {
+                    statusFailCount = 0;
+                    document.getElementById('connBanner').style.display = 'none';
                     applyMicState(data.micMuted);
                     updateCamera(data.camera);
                     updateAudio(data.audio);
                     updateSpotify(data.spotify);
 
-                    if (data.attention) mergeAttention(data.attention);
-                    if (data.nextUp) renderNextUp(data.nextUp);
-                    if (data.weather) renderWeather(data.weather);
+                    if (includeSlow) {
+                        if (data.attention) { slowData.attention = data.attention; mergeAttention(data.attention); }
+                        if (data.nextUp) { slowData.nextUp = data.nextUp; renderNextUp(data.nextUp); }
+                        if (data.weather) { slowData.weather = data.weather; renderWeather(data.weather); }
+                    } else if (slowData.attention) {
+                        mergeAttention(slowData.attention);
+                        if (slowData.nextUp) renderNextUp(slowData.nextUp);
+                        if (slowData.weather) renderWeather(slowData.weather);
+                    }
                 })
-                .catch(err => console.log('Status error:', err));
+                .catch(err => {
+                    statusFailCount++;
+                    if (statusFailCount >= 3) {
+                        document.getElementById('connBanner').style.display = 'block';
+                    }
+                    console.log('Status error:', err);
+                });
         }
 
         // --- Playlist modal ---
@@ -1945,8 +1992,12 @@
             updateAttention(merged);
         }
 
-        setInterval(updateStatus, 1000);
-        updateStatus();
+        // Fast poll: mic, camera, audio, spotify every 1s
+        setInterval(() => updateStatus(false), 1000);
+        // Slow poll: attention, calendar, weather every 10s
+        setInterval(() => updateStatus(true), 10000);
+        // Initial fetch includes everything
+        updateStatus(true);
 
         // Service worker disabled to prevent stale HTML caching
         // if ('serviceWorker' in navigator) {

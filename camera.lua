@@ -13,6 +13,7 @@ local cachedStatus = {
     frontCamera = false,
     externalCamera = false,
 }
+local refreshTimer = nil
 
 local function classifyName(name)
     name = (name or ""):lower()
@@ -49,7 +50,7 @@ end
 
 function camera.start()
     hs.timer.doAfter(3, refresh)
-    local refreshTimer = hs.timer.doEvery(5, refresh)
+    refreshTimer = hs.timer.doEvery(5, refresh)
 end
 
 return camera

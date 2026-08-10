@@ -4,7 +4,8 @@
 const WebSocket = require(require('path').join(__dirname, 'node_modules', 'ws'));
 
 const DEBUG_PORT = 9223;
-const TIMEOUT_MS = 5000;  // give up if Teams doesn't respond in 5 seconds
+const TIMEOUT_MS = 5000;       // give up if Teams doesn't respond in 5 seconds
+const PROBE_TIMEOUT_MS = 3000; // per-tab probe timeout for tree item count
 
 function checkTreeItemCount(wsUrl) {
     return new Promise((resolve, reject) => {
@@ -24,7 +25,7 @@ function checkTreeItemCount(wsUrl) {
             }
         });
         ws.on('error', reject);
-        setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 3000);
+        setTimeout(() => { ws.close(); reject(new Error('timeout')); }, PROBE_TIMEOUT_MS);
     });
 }
 

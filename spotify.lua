@@ -84,17 +84,27 @@ function spotify.likeCurrentTrack()
     hs.applescript(script)
 end
 
+-- Escape a string for safe use inside AppleScript double-quoted strings.
+local function applescriptEscape(s)
+    return (s:gsub('\\', '\\\\'):gsub('"', '\\"'))
+end
+
 function spotify.playURI(uri, contextUri)
     if not isSpotifyReady() then return end
     local script
     if contextUri and contextUri ~= "" then
-        script = string.format('tell application "Spotify" to play track "%s" in context "%s"', uri, contextUri)
+        script = string.format('tell application "Spotify" to play track "%s" in context "%s"',
+            applescriptEscape(uri), applescriptEscape(contextUri))
     else
-        script = string.format('tell application "Spotify" to play track "%s"', uri)
+        script = string.format('tell application "Spotify" to play track "%s"',
+            applescriptEscape(uri))
     end
     hs.task.new("/usr/bin/osascript", nil, {"-e", script}):start()
 end
 
+-- Batch all status fields into a single AppleScript call to avoid
+-- 7 separate synchronous round-trips per poll.
+-- Returns values as a tab-delimited string, parsed in Lua.
 function spotify.getStatus()
     if not isSpotifyReady() then
         return {
@@ -110,25 +120,57 @@ function spotify.getStatus()
         }
     end
 
-    local track = runSpotifyScript("return name of current track") or "Unknown Track"
-    local artist = runSpotifyScript("return artist of current track") or "Unknown Artist"
-    local album = runSpotifyScript("return album of current track") or ""
-    local playing = runSpotifyScript("return (player state is playing)") or false
-    local shuffle = runSpotifyScript("return shuffling") or false
-    local repeatState = runSpotifyScript("return repeating") or false
-    local pos = runSpotifyScript("return player position") or 0
-    local dur = runSpotifyScript("return (duration of current track) / 1000") or 0
+    local script = [[
+        tell application "Spotify"
+            if it is running then
+                set trackName to name of current track
+                set artistName to artist of current track
+                set albumName to album of current track
+                set isPlaying to (player state is playing) as string
+                set isShuffling to shuffling as string
+                set isRepeating to repeating as string
+                set pos to player position
+                set dur to (duration of current track) / 1000
+                return trackName & "\t" & artistName & "\t" & albumName & "\t" & isPlaying & "\t" & isShuffling & "\t" & isRepeating & "\t" & pos & "\t" & dur
+            end if
+        end tell
+        return ""
+    ]]
+    local ok, result = hs.applescript(script)
+    if not ok or not result or result == "" then
+        return {
+            isRunning = true,
+            isPlaying = false,
+            track = "Unknown Track",
+            artist = "Unknown Artist",
+            album = "",
+            shuffle = false,
+            repeatState = false,
+            position = 0,
+            duration = 0
+        }
+    end
+
+    -- Parse tab-delimited result
+    local fields = {}
+    for field in result:gmatch("[^\t]+") do
+        table.insert(fields, field)
+    end
+
+    local function boolField(s)
+        return s == "true"
+    end
 
     return {
         isRunning = true,
-        isPlaying = playing,
-        track = track,
-        artist = artist,
-        album = album,
-        shuffle = shuffle,
-        repeatState = repeatState,
-        position = math.floor(pos or 0),
-        duration = math.floor(dur or 0)
+        isPlaying = boolField(fields[4] or ""),
+        track = fields[1] or "Unknown Track",
+        artist = fields[2] or "Unknown Artist",
+        album = fields[3] or "",
+        shuffle = boolField(fields[5] or ""),
+        repeatState = boolField(fields[6] or ""),
+        position = math.floor(tonumber(fields[7]) or 0),
+        duration = math.floor(tonumber(fields[8]) or 0)
     }
 end
 

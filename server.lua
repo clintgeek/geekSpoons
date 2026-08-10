@@ -5,7 +5,6 @@ local spotify = require("spotify")
 local mute = require("mute")
 local meeting = require("meeting")
 local winManager = require("window")
-local browser = require("browser")
 local audio = require("audio")
 local screenshot = require("screenshot")
 local record = require("record")
@@ -143,68 +142,61 @@ local function handleRequest(method, path, headers, body)
             end)
         end
         return jsonResponse({status = "ok"})
-elseif path:sub(1, 12) == "/api/action/" then
+    elseif path:sub(1, 12) == "/api/action/" then
         local action = path:sub(13)
 
-        if action == "mute_toggle" then
-            local muted = mute.toggleMute()
-            return jsonResponse({status = "ok", micMuted = muted})
-        elseif action == "talk_start" then
-            local muted = mute.startTalk()
-            return jsonResponse({status = "ok", micMuted = muted})
-        elseif action == "talk_stop" then
-            local muted = mute.stopTalk()
-            return jsonResponse({status = "ok", micMuted = muted})
-        elseif action == "cam_toggle" then
-            hs.timer.doAfter(0, meeting.toggleCamera)
-        elseif action == "audio_cycle" then
-            hs.timer.doAfter(0, audio.cycleOutput)
-        elseif action == "audio_mute" then
-            local muted = audio.toggleMute()
-            return jsonResponse({status = "ok", audioMuted = muted})
-        elseif action == "audio_volup" then
-            hs.timer.doAfter(0, audio.volumeUp)
-        elseif action == "audio_voldown" then
-            hs.timer.doAfter(0, audio.volumeDown)
-        elseif action == "snap_selection" then
-            hs.timer.doAfter(0, screenshot.selection)
-        elseif action == "record_screen" then
-            hs.timer.doAfter(0, record.screen)
-        elseif action == "app_chrome" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("chrome") end)
-        elseif action == "app_messages" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("messages") end)
-        elseif action == "app_chatgpt" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("chatgpt") end)
-        elseif action == "app_teams" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("teams") end)
-        elseif action == "app_slack" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("slack") end)
-        elseif action == "app_outlook" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("outlook") end)
-        elseif action == "app_firefox" then
-            hs.timer.doAfter(0, function() apps.smartLaunch("firefox") end)
-        elseif action == "spotify_playpause" then
-            hs.timer.doAfter(0, spotify.playPause)
-        elseif action == "spotify_next" then
-            hs.timer.doAfter(0, spotify.nextTrack)
-        elseif action == "spotify_prev" then
-            hs.timer.doAfter(0, spotify.previousTrack)
-        elseif action == "spotify_shuffle" then
-            hs.timer.doAfter(0, spotify.toggleShuffle)
-        elseif action == "spotify_repeat" then
-            hs.timer.doAfter(0, spotify.toggleRepeat)
-        elseif action == "spotify_like" then
-            hs.timer.doAfter(0, spotify.likeCurrentTrack)
-        elseif action == "window_next_screen" then
-            hs.timer.doAfter(0, winManager.moveToNextScreen)
-        elseif action == "window_split" then
-            hs.timer.doAfter(0, winManager.split5050)
-        elseif action == "spotify_open" then
-            hs.timer.doAfter(0, function() hs.application.launchOrFocus("Spotify") end)
+        -- Actions that return a result (synchronous, need pcall)
+        local actionResults = {
+            mute_toggle    = function() return {micMuted = mute.toggleMute()} end,
+            talk_start     = function() return {micMuted = mute.startTalk()} end,
+            talk_stop      = function() return {micMuted = mute.stopTalk()} end,
+            audio_mute     = function() return {audioMuted = audio.toggleMute()} end,
+        }
+
+        -- Actions that fire-and-forget (deferred via hs.timer)
+        local actionDeferred = {
+            cam_toggle         = function() meeting.toggleCamera() end,
+            audio_cycle        = function() audio.cycleOutput() end,
+            audio_volup        = function() audio.volumeUp() end,
+            audio_voldown      = function() audio.volumeDown() end,
+            snap_selection     = function() screenshot.selection() end,
+            record_screen      = function() record.screen() end,
+            app_chrome         = function() apps.smartLaunch("chrome") end,
+            app_messages       = function() apps.smartLaunch("messages") end,
+            app_chatgpt        = function() apps.smartLaunch("chatgpt") end,
+            app_teams          = function() apps.smartLaunch("teams") end,
+            app_slack          = function() apps.smartLaunch("slack") end,
+            app_outlook        = function() apps.smartLaunch("outlook") end,
+            app_firefox        = function() apps.smartLaunch("firefox") end,
+            spotify_playpause  = function() spotify.playPause() end,
+            spotify_next       = function() spotify.nextTrack() end,
+            spotify_prev       = function() spotify.previousTrack() end,
+            spotify_shuffle    = function() spotify.toggleShuffle() end,
+            spotify_repeat     = function() spotify.toggleRepeat() end,
+            spotify_like       = function() spotify.likeCurrentTrack() end,
+            window_next_screen = function() winManager.moveToNextScreen() end,
+            window_split       = function() winManager.split5050() end,
+            spotify_open       = function() hs.application.launchOrFocus("Spotify") end,
+        }
+
+        if actionResults[action] then
+            local ok, result = pcall(actionResults[action])
+            if ok then
+                local response = {status = "ok"}
+                for k, v in pairs(result) do response[k] = v end
+                return jsonResponse(response)
+            else
+                return jsonResponse({status = "error", error = tostring(result)})
+            end
+        elseif actionDeferred[action] then
+            hs.timer.doAfter(0, function()
+                local ok, err = pcall(actionDeferred[action])
+                if not ok then print("action '" .. action .. "' error: " .. tostring(err)) end
+            end)
+            return jsonResponse({status = "ok"})
         end
 
-        return jsonResponse({status = "ok"})
+        return jsonResponse({status = "error", error = "unknown action: " .. action})
     end
 
     return getHTML(), 200, corsHeaders("text/html; charset=utf-8")

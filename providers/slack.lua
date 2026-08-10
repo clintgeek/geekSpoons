@@ -23,8 +23,8 @@ function slack.getAttention()
         local content = f:read("*all")
         f:close()
         if content and content ~= "" then
-            local data = hs.json.decode(content)
-            if data and not data.error then
+            local ok, data = pcall(hs.json.decode, content)
+            if ok and data and not data.error then
                 local channels = data.channels or 0
                 local dms = data.dms or 0
                 local total = channels + dms

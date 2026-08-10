@@ -23,7 +23,6 @@ local spotify = require("spotify")
 local mute = require("mute")
 local meeting = require("meeting")
 local winManager = require("window")
-local browser = require("browser")
 local audio = require("audio")
 local screenshot = require("screenshot")
 local record = require("record")
@@ -44,10 +43,10 @@ attention.register("slack", slackProvider.getAttention)
 attention.register("teams", teamsProvider.getAttention)
 attention.register("messages", messagesProvider.getAttention)
 
--- Start background attention refresh (caches provider data every 10s)
+-- Start background attention refresh (caches provider data every 60s)
 attention.start()
 
--- Start background camera status refresh (caches ioreg data every 5s)
+-- Start background camera status refresh (caches hs.camera data every 5s)
 camera.start()
 
 -- Start calendar and weather refresh

@@ -88,7 +88,8 @@ end
 -- Initial refresh is deferred so it doesn't block init.lua loading.
 function attention.start()
     if refreshTimer then refreshTimer:stop() end
-    local initialTimer = hs.timer.doAfter(3, refresh)
+    if initialTimer then initialTimer:stop() end
+    initialTimer = hs.timer.doAfter(3, refresh)
     refreshTimer = hs.timer.doEvery(REFRESH_INTERVAL, refresh)
 end
 

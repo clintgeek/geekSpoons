@@ -2,10 +2,12 @@
 -- Uses Chrome's JavaScript execution (via JXA) to read the unread count
 -- from the Google Messages web page DOM.
 --
--- Requires: Chrome > View > Developer > Allow JavaScript from Apple Events (enabled)
--- The Chrome PWA runs as a Google Chrome process with a Google Messages tab.
--- We execute JS to count "a.list-item" elements that contain ".unread" children,
--- which represent unique conversations with unread messages.
+-- Requirements:
+--   1. Chrome must be running with a tab open on messages.google.com
+--   2. Chrome > View > Developer > Allow JavaScript from Apple Events (enabled)
+--      If not enabled, the JXA call fails and we return "enable JS in Chrome".
+--   3. The Messages PWA (Chrome Apps.localized) is optional — any Chrome tab
+--      with the Messages URL works.
 
 local messages = {}
 
@@ -23,7 +25,7 @@ function run() {
                     var count = chrome.execute(t, {javascript: "var items=document.querySelectorAll('a.list-item');var n=0;for(var i=0;i<items.length;i++){if(items[i].querySelector('.unread'))n++}String(n)"});
                     return "FOUND:" + count;
                 } catch(e) {
-                    return "ERROR";
+                    return "ERROR:" + e.message;
                 }
             }
         }
@@ -34,6 +36,8 @@ function run() {
 
     local ok, appleOK, result = pcall(hs.osascript.javascript, script)
     if not ok or not appleOK then
+        -- JXA itself failed — Chrome may not be running or doesn't have
+        -- "Allow JavaScript from Apple Events" enabled
         local app = hs.application.get("Google Chrome")
         if app and app:isRunning() then
             return { severity = "unreadable", count = 0, label = "enable JS in Chrome" }
@@ -53,7 +57,12 @@ function run() {
         return { severity = "none", count = 0, label = "" }
     end
 
-    return { severity = "unreadable", count = 0, label = "not running" }
+    -- result is "NOTFOUND" or "ERROR:..." — no Messages tab open
+    if result and result:match("^ERROR:") then
+        return { severity = "unreadable", count = 0, label = "JS execution failed" }
+    end
+
+    return { severity = "unreadable", count = 0, label = "no Messages tab" }
 end
 
 return messages

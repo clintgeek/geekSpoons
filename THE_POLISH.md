@@ -41,8 +41,7 @@ A living document of rough code, fragile patterns, technical debt, and things th
 *(Resolved - see Resolved section)*
 
 ### Error handling patterns
-- `server.lua` - `/api/status` now wraps providers in `pcall` (good), but other endpoints don't.
-- `providers/slack.lua` vs `providers/teams.lua` - Slack falls back to `root-state.json`, Teams falls back to dock badge. Different by design (different apps expose different data sources).
+*(All resolved or by design - see Resolved section)*
 
 ### Duplicated logic
 *(Resolved - see Resolved section)*
@@ -87,10 +86,7 @@ A living document of rough code, fragile patterns, technical debt, and things th
 
 ## Missing Features / Incomplete
 
-- ~~`init.lua` lines 57-58 - `messagesProvider.start()` commented out.~~ **RESOLVED**: Removed.
-- `providers/messages.lua` lines 1-8 - Comment mentions Chrome PWA requirement but no validation.
-- ~~`scripts/calendar_ics.js` - Recurrence expansion doesn't handle EXDATE, RDATE, BYDAY, BYMONTH, BYSETPOS.~~ **RESOLVED**: node-ical handles all of these.
-- `index.html` - No error states shown to user when API calls fail. Just console.log.
+*(All resolved - see Resolved section)*
 
 ---
 
@@ -146,3 +142,7 @@ A living document of rough code, fragile patterns, technical debt, and things th
 - [x] Performance: `index.html` added in-memory `artworkCache` for iTunes artwork — repeated tracks no longer refetch from iTunes API
 - [x] Performance: `init.lua` app-launch timers are sequential by design (3s→10s→18s→22s settling sequence), not redundant. No consolidation needed.
 - [x] Performance: `init.lua` `lsof` port check is ~10ms and only runs on Slack launch — not a hot path
+- [x] Error handling: `server.lua` all action endpoints now wrapped in pcall; refactored from long if/elseif chain to lookup tables
+- [x] Error handling: `server.lua` unknown actions now return explicit error JSON instead of generic "ok"
+- [x] Messages provider: improved error messages (distinguishes "no Messages tab" from "JS execution failed" from "Chrome not running")
+- [x] UI: connection lost banner appears after 3 consecutive failed status polls, hides on recovery

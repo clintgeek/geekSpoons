@@ -5,7 +5,7 @@ const ical = require('node-ical');
 const { DateTime } = require('luxon');
 
 const url = process.argv[2];
-const LOCAL_TZ = 'America/Chicago';
+const LOCAL_TZ = DateTime.local().zoneName || 'America/Chicago';
 
 function fetchIcs(u) {
     return new Promise((resolve, reject) => {

@@ -23,8 +23,7 @@ apps.config = {
     messages = {
         name = "Messages",
         path = env.get("MESSAGES_APP_PATH") or (HOME .. "/Applications/Chrome Apps.localized/Messages.app"),
-        matchPath = "Chrome Apps.localized/Messages.app",
-        appUrl = "https://messages.google.com/web/u/1/conversations"
+        matchPath = "Chrome Apps.localized/Messages.app"
     },
     chatgpt = {
         name = "ChatGPT",

@@ -50,8 +50,8 @@ local function refresh()
             return
         end
 
-        local data = hs.json.decode(stdOut)
-        if not data or not data.current_condition or not data.current_condition[1] then
+        local ok, data = pcall(hs.json.decode, stdOut)
+        if not ok or not data or not data.current_condition or not data.current_condition[1] then
             cachedState = { available = false }
             return
         end

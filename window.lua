@@ -1,4 +1,4 @@
--- window.lua: Window layout, multi-monitor movement, and workspace management helpers
+-- window.lua: Window layout and multi-monitor movement helpers
 local winManager = {}
 
 function winManager.moveToNextScreen()
@@ -44,27 +44,6 @@ function winManager.split5050()
         })
         otherWins[1]:focus()
     end
-end
-
-function winManager.toggleCaffeinate()
-    local state = hs.caffeinate.get("displayIdle")
-    if state then
-        hs.caffeinate.set("displayIdle", false, true)
-        hs.alert.show("Caffeinate OFF (Sleep Allowed)")
-        return false
-    else
-        hs.caffeinate.set("displayIdle", true, true)
-        hs.alert.show("Caffeinate ON (Preventing Sleep)")
-        return true
-    end
-end
-
-function winManager.isCaffeinated()
-    return hs.caffeinate.get("displayIdle") or false
-end
-
-function winManager.lockScreen()
-    hs.caffeinate.lockScreen()
 end
 
 return winManager
