@@ -1362,6 +1362,63 @@
             color: var(--bg-primary);
         }
 
+        .schedule-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--panel-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .schedule-item.now {
+            border-color: var(--green);
+            background: rgba(0, 255, 65, 0.08);
+        }
+
+        .schedule-item.past {
+            opacity: 0.45;
+        }
+
+        .schedule-time {
+            font-weight: 700;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+            min-width: 90px;
+        }
+
+        .schedule-item.now .schedule-time { color: var(--green); }
+
+        .schedule-title {
+            flex: 1;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .schedule-badge {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: var(--blue-dark);
+            color: var(--blue);
+        }
+
+        .schedule-empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 24px;
+            font-size: 14px;
+        }
+
         /* Responsive height for meeting controls */
         @media (max-height: 800px) {
             .track-name { font-size: 28px; }
@@ -1434,14 +1491,14 @@
             <div class="panel panel-small info-tiles-panel">
                 <div class="info-tiles-grid">
                     <!-- NEXT UP -->
-                    <div class="info-tile next-up-tile" id="nextUpTile">
+                    <div class="info-tile next-up-tile" id="nextUpTile" onclick="toggleScheduleModal()">
                         <div class="next-up-content">
                             <div class="info-tile-header" id="nextUpHeader">NEXT UP</div>
                             <div class="info-tile-title" id="nextUpTitle">—</div>
                             <div class="info-tile-meta" id="nextUpMeta"></div>
                             <div class="info-tile-remaining" id="nextUpRemaining"></div>
                         </div>
-                        <button class="info-tile-join" id="nextUpJoin" style="display: none;">JOIN</button>
+                        <button class="info-tile-join" id="nextUpJoin" style="display: none;" onclick="event.stopPropagation()">JOIN</button>
                     </div>
 
                     <!-- WEATHER -->
@@ -1805,7 +1862,7 @@
             if (up.meeting && up.joinURL) {
                 join.textContent = 'JOIN ' + (up.meetingType || 'MEETING');
                 join.style.display = 'inline-block';
-                join.onclick = () => window.open(up.joinURL, '_blank');
+                join.onclick = () => fetch('/api/action/join_meeting?url=' + encodeURIComponent(up.joinURL), { method: 'POST', body: '{}' });
             } else {
                 join.style.display = 'none';
             }
@@ -1924,6 +1981,46 @@
 
         function togglePlaylistModal() {
             document.getElementById('playlistModal').classList.toggle('active');
+        }
+
+        // --- Schedule modal ---
+        function toggleScheduleModal() {
+            const modal = document.getElementById('scheduleModal');
+            if (!modal.classList.contains('active')) {
+                // Opening — render the current schedule from cached data
+                const nextUp = slowData.nextUp;
+                if (nextUp && nextUp.schedule) {
+                    renderSchedule(nextUp.schedule);
+                } else {
+                    renderSchedule([]);
+                }
+            }
+            modal.classList.toggle('active');
+        }
+
+        function renderSchedule(schedule) {
+            const body = document.getElementById('scheduleModalBody');
+            if (!schedule || schedule.length === 0) {
+                body.innerHTML = '<div class="schedule-empty">No events today</div>';
+                return;
+            }
+            const now = new Date();
+            let html = '';
+            for (const ev of schedule) {
+                const start = new Date(ev.start);
+                const end = new Date(ev.end);
+                const isNow = start <= now && now < end;
+                const isPast = end < now;
+                const timeStr = start.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) +
+                    '–' + end.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+                const cls = 'schedule-item' + (isNow ? ' now' : isPast ? ' past' : '');
+                const badge = ev.meeting ? '<span class="schedule-badge">' + (ev.meetingType || 'MTG') + '</span>' : '';
+                html += '<div class="' + cls + '">' +
+                    '<span class="schedule-time">' + timeStr + '</span>' +
+                    '<span class="schedule-title">' + (ev.title || 'Untitled') + '</span>' +
+                    badge + '</div>';
+            }
+            body.innerHTML = html;
         }
 
         // --- Attention state ---
@@ -2047,6 +2144,19 @@
                     <span>06. Your Liked Songs</span>
                     <button class="modal-load" onclick="playUri('', 'spotify:user:spotify:collection'); event.stopPropagation();">Load</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCHEDULE MODAL -->
+    <div id="scheduleModal" class="modal-overlay" onclick="if(event.target === this) toggleScheduleModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <span id="scheduleModalTitle">TODAY'S SCHEDULE</span>
+                <span class="modal-close" onclick="toggleScheduleModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="scheduleModalBody">
+                <div class="modal-item" style="justify-content: center; color: var(--text-muted);">Loading...</div>
             </div>
         </div>
     </div>

@@ -71,6 +71,21 @@ async function main() {
 
         candidates.sort((a, b) => new Date(a.start) - new Date(b.start));
 
+        // Build today's schedule (events starting today)
+        const todaySchedule = candidates.filter(c => {
+            const s = new Date(c.start);
+            return s.getFullYear() === now.getFullYear() &&
+                   s.getMonth() === now.getMonth() &&
+                   s.getDate() === now.getDate();
+        }).map(c => ({
+            title: c.title,
+            start: c.start,
+            end: c.end,
+            meeting: c.meeting,
+            meetingType: c.meetingType,
+            joinURL: c.joinURL
+        }));
+
         // Find current meeting (in progress) or next upcoming
         let selected = null;
         for (const c of candidates) {
@@ -86,11 +101,12 @@ async function main() {
         }
 
         if (!selected) {
-            console.log(JSON.stringify({ available: false, title: 'No upcoming events' }));
+            console.log(JSON.stringify({ available: false, title: 'No upcoming events', schedule: todaySchedule }));
             return;
         }
 
         selected.available = true;
+        selected.schedule = todaySchedule;
         console.log(JSON.stringify(selected));
     } catch (err) {
         console.log(JSON.stringify({ available: false, error: err.message }));

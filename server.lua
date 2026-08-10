@@ -131,12 +131,25 @@ local function handleRequest(method, path, headers, body)
             end
         end
         return jsonResponse(data)
-    elseif path:find("/api/action/play_uri") then
+    elseif path:find("/api/action/join_meeting", 1, true) then
+        local url = path:match("url=([^&]+)")
+        if url then
+            -- Simple URL decode (hs.http.urlPartDecode can crash on some inputs)
+            url = url:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)
+            hs.timer.doAfter(0, function()
+                pcall(function()
+                    hs.execute("open '" .. url .. "'")
+                end)
+            end)
+        end
+        return jsonResponse({status = "ok"})
+    elseif path:find("/api/action/play_uri", 1, true) then
         local track = path:match("track=([^&]+)")
         local context = path:match("context=([^&]+)")
         if track or context then
-            track = track and hs.http.urlPartDecode(track) or ""
-            context = context and hs.http.urlPartDecode(context) or ""
+            local function urlDecode(s) return s and s:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end) or "" end
+            track = urlDecode(track)
+            context = urlDecode(context)
             hs.timer.doAfter(0, function()
                 spotify.playURI(track, context)
             end)
