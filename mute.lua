@@ -1,8 +1,9 @@
 -- mute.lua: Microphone mute controller with HUD indicator
--- Mutes ALL system input devices (not just default) by setting input
--- volume to 0. Shows a persistent "MIC MUTED" pill in the bottom-left
--- corner of the Mac screen while muted, plus a brief flash HUD on
--- mute/unmute transitions.
+-- Mutes ALL system input devices using hardware input muting
+-- (setInputMuted) which actually silences the mic, unlike input volume = 0
+-- which some USB audio devices (e.g., Plugable Audio) ignore.
+-- Also sets input volume to 0 as a backup for devices that don't support
+-- hardware muting.
 
 local mute = {}
 
@@ -103,7 +104,7 @@ local function hideMutedPill()
     end
 end
 
--- Mute ALL input devices by setting their volume to 0.
+-- Mute ALL input devices using hardware muting + volume = 0 as backup.
 -- Saves each device's current volume for later restoration.
 local function muteAllInputs()
     savedInputVolumes = {}
@@ -111,16 +112,21 @@ local function muteAllInputs()
         local vol = dev:inputVolume() or 0
         if vol > 0 then
             savedInputVolumes[dev:uid() or dev:name()] = vol
-            dev:setInputVolume(0)
         end
+        -- Try hardware mute first (actually silences the mic)
+        local ok = dev:setInputMuted(true)
+        -- Also set volume to 0 as backup for devices that don't support muting
+        dev:setInputVolume(0)
     end
 end
 
--- Unmute ALL input devices by restoring their saved volumes.
+-- Unmute ALL input devices using hardware unmute + volume restoration.
 local function unmuteAllInputs()
     for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
         local key = dev:uid() or dev:name()
         local restoreVol = savedInputVolumes[key] or DEFAULT_INPUT_VOLUME
+        -- Unmute hardware first, then restore volume
+        dev:setInputMuted(false)
         dev:setInputVolume(restoreVol)
     end
 end
@@ -128,6 +134,9 @@ end
 function mute.isMuted()
     local dev = hs.audiodevice.defaultInputDevice()
     if dev then
+        -- Check hardware mute first (authoritative), fall back to volume
+        local inputMuted = dev:inputMuted()
+        if inputMuted ~= nil then return inputMuted end
         local vol = dev:inputVolume()
         return vol ~= nil and vol == 0
     end
