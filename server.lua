@@ -131,6 +131,17 @@ local function handleRequest(method, path, headers, body)
             end
         end
         return jsonResponse(data)
+    elseif path:find("/api/action/set_output", 1, true) then
+        local name = path:match("name=([^&]+)")
+        if name then
+            name = name:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)
+            local dev = hs.audiodevice.findDeviceByName(name)
+            if dev then
+                dev:setDefaultOutputDevice()
+                return jsonResponse({status = "ok", output = dev:name()})
+            end
+        end
+        return jsonResponse({status = "error", error = "device not found"})
     elseif path:find("/api/action/join_meeting", 1, true) then
         local url = path:match("url=([^&]+)")
         if url then
