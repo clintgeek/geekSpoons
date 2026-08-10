@@ -37,7 +37,6 @@ local attention = require("attention")
 local camera = require("camera")
 local calendar = require("calendar")
 local weather = require("weather")
-local keepalive = require("keepalive")
 local outlookProvider = require("providers.outlook")
 local slackProvider = require("providers.slack")
 local teamsProvider = require("providers.teams")
@@ -61,9 +60,6 @@ camera.start()
 -- Start calendar and weather refresh
 calendar.start()
 weather.start()
-
--- Start Bluetooth speaker keep-alive (prevents Klipsch from auto-powering off)
-keepalive.start(300)
 
 -- Start Stream Deck HTTP Server on port 8080
 server.start()
