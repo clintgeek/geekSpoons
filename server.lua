@@ -151,11 +151,17 @@ local function handleRequest(method, path, headers, body)
             talk_start     = function() return {micMuted = mute.startTalk()} end,
             talk_stop      = function() return {micMuted = mute.stopTalk()} end,
             audio_mute     = function() return {audioMuted = audio.toggleMute()} end,
+            cam_toggle     = function()
+                meeting.toggleCamera()
+                -- Wait briefly for the camera state to settle, then refresh
+                -- and return the new state so the frontend updates immediately
+                hs.timer.doAfter(1.5, function() camera.refresh() end)
+                return {camera = camera.getStatus()}
+            end,
         }
 
         -- Actions that fire-and-forget (deferred via hs.timer)
         local actionDeferred = {
-            cam_toggle         = function() meeting.toggleCamera() end,
             audio_cycle        = function() audio.cycleOutput() end,
             audio_volup        = function() audio.volumeUp() end,
             audio_voldown      = function() audio.volumeDown() end,

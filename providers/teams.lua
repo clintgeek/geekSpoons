@@ -1,11 +1,14 @@
 -- providers/teams.lua: Microsoft Teams attention provider
--- Reads cached unread counts from a temp file populated by a background refresh.
--- The node script runs asynchronously via init.lua's background launcher,
--- writing JSON to /tmp/teams_attention.json. This provider just reads the file.
+-- Reads cached unread counts from a temp file populated by a background node
+-- script that connects to Teams' Chrome DevTools Protocol on port 9223.
+-- The provider triggers the node script on every refresh (non-blocking via
+-- hs.execute with detached shell), then reads the cache file.
 
 local teams = {}
 
 local CACHE_FILE = "/tmp/teams_attention.json"
+local REFRESH_SCRIPT = hs.configdir .. "/scripts/teams_unread.js"
+local NODE_BIN = os.getenv("NODE_BIN_PATH") or "node"
 
 -- Build the attention result from cached counts (people, meetings, channels).
 -- DMs from people are urgent; everything else is attention-level.
@@ -89,6 +92,12 @@ local function readDockBadge()
     return nil
 end
 
+-- Launch the node script in the background to refresh the cache file.
+-- Fully detached so it doesn't block the Lua thread.
+local function refreshCache()
+    hs.execute('"' .. NODE_BIN .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >' .. CACHE_FILE .. ' 2>/dev/null &')
+end
+
 function teams.getAttention()
     -- Use bundle ID to find the main Teams app, not the background agent process
     local app = hs.application.get("com.microsoft.teams2")
@@ -99,6 +108,9 @@ function teams.getAttention()
     if not app:mainWindow() then
         return { severity = "unreadable", count = 0, label = "not running" }
     end
+
+    -- Trigger a background cache refresh (non-blocking)
+    refreshCache()
 
     -- Try cache first (instant file I/O), fall back to dock badge
     local result = readCache()

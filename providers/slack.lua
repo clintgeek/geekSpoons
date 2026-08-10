@@ -1,12 +1,21 @@
 -- providers/slack.lua: Slack attention provider
--- Reads cached unread counts from a temp file populated by a background refresh.
--- The node script runs asynchronously via init.lua's background launcher,
--- writing JSON to /tmp/slack_attention.json. This provider just reads the file.
+-- Reads cached unread counts from a temp file populated by a background node
+-- script that connects to Slack's Chrome DevTools Protocol on port 9222.
+-- The provider triggers the node script on every refresh (non-blocking via
+-- hs.execute with detached shell), then reads the cache file.
 
 local slack = {}
 
 local CACHE_FILE = "/tmp/slack_attention.json"
 local ROOT_STATE = os.getenv("HOME") .. "/Library/Application Support/Slack/storage/root-state.json"
+local REFRESH_SCRIPT = hs.configdir .. "/scripts/slack_unread.js"
+local NODE_BIN = os.getenv("NODE_BIN_PATH") or "node"
+
+-- Launch the node script in the background to refresh the cache file.
+-- Fully detached so it doesn't block the Lua thread.
+local function refreshCache()
+    hs.execute('"' .. NODE_BIN .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >' .. CACHE_FILE .. ' 2>/dev/null &')
+end
 
 function slack.getAttention()
     local app = hs.application.get("Slack")
@@ -17,7 +26,10 @@ function slack.getAttention()
         return { severity = "unreadable", count = 0, label = "not running" }
     end
 
-    -- Read cached result from background refresh (instant file I/O)
+    -- Trigger a background cache refresh (non-blocking)
+    refreshCache()
+
+    -- Read the existing cache file (may be from the previous refresh cycle)
     local f = io.open(CACHE_FILE, "r")
     if f then
         local content = f:read("*all")
@@ -53,7 +65,7 @@ function slack.getAttention()
         end
     end
 
-    -- Fallback: root-state.json (fast file read)
+    -- Fallback: root-state.json (fast file read, always available)
     local f2 = io.open(ROOT_STATE, "r")
     if f2 then
         local content = f2:read("*all")

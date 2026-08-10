@@ -2,37 +2,65 @@ local attention = {}
 local providers = {}
 
 -- Cache attention state so /api/status stays fast.
--- Providers (AX traversal, LevelDB reads) can take 1-2+ seconds each,
--- which would block the 1-second status polling. Instead we refresh
--- in the background on a timer and serve cached data to callers.
-local cachedState = {}
-local refreshTimer = nil
-local initialTimer = nil
-local REFRESH_INTERVAL = 60  -- seconds between background refreshes
+-- Each provider has its own refresh timer with an interval tuned to how
+-- expensive it is and how quickly its data changes. This avoids running
+-- all providers on a single slow timer and lets fast providers update
+-- more frequently without waiting for slow ones.
 
-local function refresh()
-    local newState = {}
-    for appId, providerFn in pairs(providers) do
-        -- Preserve loading state: don't let periodic refresh overwrite
-        -- a loading marker with fallback data. The loading state is only
-        -- cleared by refreshNow() after cache files are written.
-        if cachedState[appId] and cachedState[appId].severity == "loading" then
-            newState[appId] = cachedState[appId]
-        else
-            local ok, result = pcall(providerFn)
-            if ok and type(result) == "table" then
-                newState[appId] = result
-            else
-                local f = io.open("/tmp/attention_debug.log", "a")
-                if f then
-                    f:write(os.date("%H:%M:%S") .. " provider " .. appId .. " error: " .. tostring(result) .. "\n")
-                    f:close()
-                end
-                newState[appId] = { severity = "none", count = 0, label = "" }
-            end
+local cachedState = {}
+local refreshTimers = {}
+
+-- Per-provider refresh intervals (seconds).
+-- Tuned for "live data" without blocking or resource drain:
+--   slack/teams: 15s — node scripts run detached (non-blocking), safe to run often
+--   outlook:     10s — AX AppleScript is ~200ms, cheap enough for main thread
+--   messages:    15s — JXA Chrome probe is ~500ms, slightly heavier
+local DEFAULT_INTERVAL = 15
+local PROVIDER_INTERVALS = {
+    slack = 15,
+    teams = 15,
+    outlook = 10,
+    messages = 15,
+}
+
+-- Refresh a single provider and update its cached state.
+-- Preserves loading state for a limited time: a periodic refresh won't
+-- overwrite a loading marker for LOADING_TIMEOUT_SECS, after which the
+-- loading state is cleared and the provider is re-evaluated.
+local LOADING_TIMEOUT_SECS = 30  -- max time to show "Loading..." before giving up
+local loadingSince = {}
+
+local function refreshProvider(appId)
+    if cachedState[appId] and cachedState[appId].severity == "loading" then
+        -- Check if loading state has expired
+        if loadingSince[appId] and (os.time() - loadingSince[appId]) < LOADING_TIMEOUT_SECS then
+            return  -- still within the loading grace period
         end
+        -- Loading has timed out — clear it and re-evaluate
+        cachedState[appId] = nil
+        loadingSince[appId] = nil
     end
-    cachedState = newState
+    local providerFn = providers[appId]
+    if not providerFn then return end
+
+    local ok, result = pcall(providerFn)
+    if ok and type(result) == "table" then
+        cachedState[appId] = result
+    else
+        local f = io.open("/tmp/attention_debug.log", "a")
+        if f then
+            f:write(os.date("%H:%M:%S") .. " provider " .. appId .. " error: " .. tostring(result) .. "\n")
+            f:close()
+        end
+        cachedState[appId] = { severity = "none", count = 0, label = "" }
+    end
+end
+
+-- Refresh all providers (used by refreshNow after app launch).
+local function refreshAll()
+    for appId, _ in pairs(providers) do
+        refreshProvider(appId)
+    end
 end
 
 function attention.register(appId, providerFn)
@@ -51,46 +79,58 @@ end
 -- Mark an app as loading (called when app launches, before cache data is ready).
 function attention.markLoading(appId)
     cachedState[appId] = { severity = "loading", count = 0, label = "Loading..." }
-    local dbg = io.open("/tmp/attention_refresh.log", "a")
-    if dbg then dbg:write(os.date("%H:%M:%S") .. " markLoading(" .. appId .. ")\n") dbg:close() end
+    loadingSince[appId] = os.time()
 end
 
--- Trigger an immediate refresh, but only clear loading markers for apps
--- whose cache files have been freshly written with valid data.
--- This prevents falling back to stale data if the background script failed.
+-- Trigger an immediate refresh of all providers, clearing all loading state.
+-- Used after app launch sequences complete.
 function attention.refreshNow()
     for appId, state in pairs(cachedState) do
         if state.severity == "loading" then
-            local cachePath = "/tmp/" .. appId .. "_attention.json"
-            local f = io.open(cachePath, "r")
-            local valid = false
-            if f then
-                local content = f:read("*all")
-                f:close()
-                -- Check if the cache file has real data (no error field)
-                if content and content ~= "" then
-                    local ok, data = pcall(hs.json.decode, content)
-                    if ok and data and not data.error then
-                        valid = true
-                    end
-                end
-            end
-            if valid then
-                cachedState[appId] = nil  -- cache is good, clear loading
-            end
-            -- else: cache is stale or errored, keep loading state
+            cachedState[appId] = nil
         end
     end
-    refresh()
+    refreshAll()
 end
 
--- Start background refresh timer. Call once after all providers are registered.
--- Initial refresh is deferred so it doesn't block init.lua loading.
+-- Refresh a single provider immediately, clearing any loading state first.
+-- Used by appWatcher settle timers after an app launches.
+-- Clears loading unconditionally — the app has had time to settle, so we
+-- should show real data even if the cache file still has an error from
+-- the previous failed connection attempt.
+function attention.refreshProvider(appId)
+    if cachedState[appId] and cachedState[appId].severity == "loading" then
+        cachedState[appId] = nil
+    end
+    refreshProvider(appId)
+end
+
+-- Start per-provider refresh timers. Call once after all providers are registered.
+-- Timers are staggered so providers don't all fire at the same instant.
 function attention.start()
-    if refreshTimer then refreshTimer:stop() end
-    if initialTimer then initialTimer:stop() end
-    initialTimer = hs.timer.doAfter(3, refresh)
-    refreshTimer = hs.timer.doEvery(REFRESH_INTERVAL, refresh)
+    -- Stop any existing timers
+    for _, timer in pairs(refreshTimers) do
+        if timer then timer:stop() end
+    end
+    refreshTimers = {}
+
+    local stagger = 0
+    for appId, _ in pairs(providers) do
+        local interval = PROVIDER_INTERVALS[appId] or DEFAULT_INTERVAL
+        -- Stagger initial fire by 2s per provider so they don't collide
+        local initialDelay = 3 + stagger
+        stagger = stagger + 2
+
+        -- Initial refresh (deferred so it doesn't block init.lua loading)
+        hs.timer.doAfter(initialDelay, function()
+            refreshProvider(appId)
+        end)
+
+        -- Ongoing refresh timer
+        refreshTimers[appId] = hs.timer.doEvery(interval, function()
+            refreshProvider(appId)
+        end)
+    end
 end
 
 return attention

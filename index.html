@@ -1596,10 +1596,11 @@
         function applyMicState(muted) {
             const micBtn = document.getElementById('micBtn');
             const micLabel = document.getElementById('micLabel');
-            if (!micBtn || !micLabel) return;
-            micBtn.classList.remove('live', 'muted');
-            micBtn.classList.add(muted ? 'muted' : 'live');
-            micLabel.textContent = muted ? 'MIC MUTED' : 'MIC LIVE';
+            if (micBtn && micLabel) {
+                micBtn.classList.remove('live', 'muted');
+                micBtn.classList.add(muted ? 'muted' : 'live');
+                micLabel.textContent = muted ? 'MIC MUTED' : 'MIC LIVE';
+            }
         }
 
         function applyAudioMuteState(muted) {
@@ -1623,9 +1624,15 @@
                 .then(data => {
                     if (data && data.micMuted !== undefined) applyMicState(data.micMuted);
                     if (data && data.audioMuted !== undefined) applyAudioMuteState(data.audioMuted);
+                    if (data && data.camera !== undefined) updateCamera(data.camera);
                 })
                 .catch(e => console.log('Action failed:', e));
             setTimeout(updateStatus, 300);
+            // Camera toggle takes ~1.5s to settle on the server side;
+            // refresh again to pick up the updated camera state
+            if (action === 'cam_toggle') {
+                setTimeout(updateStatus, 2000);
+            }
         }
 
         // --- Talk button touch handlers ---
@@ -1865,11 +1872,13 @@
         }
 
         // --- Status polling ---
-        // Fast poll (1s): mic, camera, audio, spotify — values that change in real time.
-        // Slow poll (10s): attention, calendar, weather — values that change slowly.
-        // This halves request volume for the slow-changing data.
+        // Fast poll (1s): mic, camera, audio, spotify, attention — values that
+        // change in real time or need immediate UI updates (e.g. loading state
+        // when an app launches).
+        // Slow poll (10s): calendar, weather — values that change slowly and
+        // involve more expensive server-side computation.
         let statusFailCount = 0;
-        let slowData = { attention: null, nextUp: null, weather: null };
+        let slowData = { nextUp: null, weather: null };
 
         function updateStatus(includeSlow) {
             fetch('/api/status')
@@ -1885,12 +1894,14 @@
                     updateAudio(data.audio);
                     updateSpotify(data.spotify);
 
+                    // Attention: always apply from fresh response (loading states
+                    // need real-time updates when apps launch/quit)
+                    if (data.attention) mergeAttention(data.attention);
+
                     if (includeSlow) {
-                        if (data.attention) { slowData.attention = data.attention; mergeAttention(data.attention); }
                         if (data.nextUp) { slowData.nextUp = data.nextUp; renderNextUp(data.nextUp); }
                         if (data.weather) { slowData.weather = data.weather; renderWeather(data.weather); }
-                    } else if (slowData.attention) {
-                        mergeAttention(slowData.attention);
+                    } else {
                         if (slowData.nextUp) renderNextUp(slowData.nextUp);
                         if (slowData.weather) renderWeather(slowData.weather);
                     }

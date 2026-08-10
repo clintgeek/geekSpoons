@@ -1,69 +1,64 @@
 -- providers/outlook.lua: Outlook unread mail attention provider
--- Reads unread count from Outlook's OSA (Outlook Service API) sync logs.
--- The new Edge-based Outlook doesn't expose mail via AppleScript or AXUIElement,
--- but its sync logs contain GetFolder responses with <UnreadCount> per folder.
--- We search across recent OSA sessions for the latest GetFolder response.
--- Only sessions modified within the last 2 hours are considered valid;
--- older sessions return "unreadable" to avoid showing stale counts.
+--
+-- The new Edge-based Outlook (IsRunningNewOutlook=1) doesn't expose its
+-- window via the accessibility tree, doesn't support AppleScript mail queries,
+-- doesn't store mail in the local SQLite DB, and doesn't have a dock badge.
+-- Its preference plist is locked by cfprefsd, so we can't check
+-- IsRunningNewOutlook via `defaults read` (it hangs).
+--
+-- Strategy: Try the AX tree query. If it returns "NOWINDOW", the window isn't
+-- accessible (new Outlook or minimized). In that case, just show "running".
+-- If the AX tree is available (old Outlook), parse the Inbox unread count
+-- from the cell description — this is real-time data.
 
 local outlook = {}
 
-local env = require("env")
-local FRESHNESS_SECS = 2 * 60 * 60  -- 2 hours
+-- AppleScript to find the Inbox folder's description in Outlook's AX tree.
+-- Breadth-first search capped at 200 elements. Returns the description string,
+-- "NOTFOUND" if no Inbox cell, or "NOWINDOW" if the AX tree has no windows.
+local INBOX_AX_QUERY = [[
+tell application "System Events"
+    tell process "Microsoft Outlook"
+        set winCount to count of windows
+        if winCount is 0 then return "NOWINDOW"
+        
+        set searchQueue to {}
+        set winChildren to UI elements of window 1
+        repeat with child in winChildren
+            set end of searchQueue to child
+        end repeat
+        
+        repeat 200 times
+            if (count of searchQueue) is 0 then exit repeat
+            set elem to item 1 of searchQueue
+            set searchQueue to rest of searchQueue
+            
+            try
+                set elemRole to role of elem
+                if elemRole is "AXCell" then
+                    set elemDesc to description of elem
+                    if elemDesc starts with "Inbox" then
+                        return elemDesc
+                    end if
+                end if
+                set elemChildren to UI elements of elem
+                repeat with child in elemChildren
+                    set end of searchQueue to child
+                end repeat
+            end try
+        end repeat
+        
+        return "NOTFOUND"
+    end tell
+end tell
+]]
 
--- UBF8T346G9 is Microsoft's shared Office group container ID (same for all installs)
-local OSA_BASE = env.get("OUTLOOK_OSA_PATH") or
-    (os.getenv("HOME") .. "/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Identity/Osa")
-
--- Escape a string for safe use inside double quotes in a shell command.
-local function shellEscape(s)
-    return (s:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('`', '\\`'):gsub('%$', '\\$'))
-end
-
--- Parse OSA sync XML to extract the Inbox unread count.
--- Tracks <Type>Inbox...</Type> then grabs the following <UnreadCount>.
-local function parseInboxUnread(xml)
-    local currentFolderType = nil
-    for line in xml:gmatch("[^\r\n]+") do
-        local folderType = line:match("<Type>([A-Za-z]+[^<]*)</Type>")
-        if folderType then
-            currentFolderType = folderType
-        end
-        local unread = line:match("<UnreadCount>(%d+)</UnreadCount>")
-        if unread and currentFolderType then
-            if currentFolderType:match("Inbox") then
-                return tonumber(unread) or 0
-            end
-            currentFolderType = nil
-        end
-    end
-    return 0
-end
-
--- Find the most recent GetFolder response file in a session directory.
--- Returns the file path, or nil if not found.
-local function findGetFolderFile(sessionDir)
-    local latestFile = hs.execute(
-        'ls -t "' .. shellEscape(sessionDir) .. '" 2>/dev/null | ' ..
-        'grep "\\.GetFolder\\." | grep "res" | head -1'
-    )
-    if not latestFile or latestFile == "" then return nil end
-    latestFile = latestFile:gsub("%s+$", "")
-    return sessionDir .. '/' .. latestFile
-end
-
--- Check if a file was modified within FRESHNESS_SECS.
--- Uses hs.fs.attributes (no shell command) for the modification time.
-local function isFileFresh(filePath)
-    local attrs = hs.fs.attributes(filePath)
-    if not attrs or not attrs.modification then return false end
-    return (os.time() - attrs.modification) <= FRESHNESS_SECS
-end
-
--- Read and decompress a gzip file, returning the contents or nil.
-local function readGzipFile(filePath)
-    local content = hs.execute('gunzip -c "' .. shellEscape(filePath) .. '" 2>/dev/null')
-    if content and content ~= "" then return content end
+-- Parse the unread count from an Inbox description like "Inbox; 3 unread messages"
+local function parseUnreadCount(desc)
+    if not desc then return nil end
+    local count = desc:match("Inbox;%s*(%d+)%s+unread")
+    if count then return tonumber(count) end
+    if desc:match("^Inbox") then return 0 end
     return nil
 end
 
@@ -73,32 +68,19 @@ function outlook.getAttention()
         return { severity = "unreadable", count = 0, label = "not running" }
     end
 
-    -- Search the 5 most recent OSA sessions for a GetFolder response
-    local sessions = hs.execute('ls -t "' .. shellEscape(OSA_BASE) .. '" 2>/dev/null | head -5')
-    if not sessions or sessions == "" then
-        return { severity = "unreadable", count = 0, label = "no sync data" }
-    end
-
-    for session in sessions:gmatch("[^\n]+") do
-        session = session:gsub("%s+$", "")
-        local sessionDir = OSA_BASE .. "/" .. session
-
-        local filePath = findGetFolderFile(sessionDir)
-        if filePath and isFileFresh(filePath) then
-            local xml = readGzipFile(filePath)
-            if xml then
-                local inboxCount = parseInboxUnread(xml)
-                if inboxCount > 0 then
-                    return { severity = "attention", count = inboxCount, label = inboxCount .. " unread" }
-                end
-                -- Found a recent GetFolder response but Inbox has 0 unread
-                return { severity = "none", count = 0, label = "" }
-            end
+    -- Try AX tree (works with old Outlook; new Outlook returns "NOWINDOW")
+    local ok, result = hs.osascript.applescript(INBOX_AX_QUERY)
+    if ok and result and result ~= "NOTFOUND" and result ~= "NOWINDOW" then
+        local count = parseUnreadCount(result)
+        if count and count > 0 then
+            return { severity = "attention", count = count, label = count .. " unread" }
         end
+        -- AX found Inbox with 0 unread
+        return { severity = "none", count = 0, label = "" }
     end
 
-    -- Outlook is running but no recent sync data found
-    return { severity = "unreadable", count = 0, label = "no recent sync" }
+    -- AX tree not available (new Outlook or window not visible) — just show running
+    return { severity = "none", count = 0, label = "" }
 end
 
 return outlook

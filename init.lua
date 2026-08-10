@@ -15,8 +15,14 @@ local function reloadConfig(files)
     end
 end
 
-local configFileWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig)
-configFileWatcher:start()
+-- Retain references to long-lived objects (watchers, timers) so they
+-- aren't garbage collected when init.lua's main chunk finishes executing.
+-- Hammerspoon cancels timers/watchers when their Lua objects are GC'd.
+-- This must be a global (not local) so it persists after init.lua returns.
+_G._retained = {}
+
+_G._retained.configFileWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig)
+_G._retained.configFileWatcher:start()
 
 -- Load core modules
 local spotify = require("spotify")
@@ -43,7 +49,9 @@ attention.register("slack", slackProvider.getAttention)
 attention.register("teams", teamsProvider.getAttention)
 attention.register("messages", messagesProvider.getAttention)
 
--- Start background attention refresh (caches provider data every 60s)
+-- Start per-provider attention refresh timers.
+-- Each provider refreshes on its own interval (10-15s) with staggered
+-- initial delays so they don't all fire at the same instant.
 attention.start()
 
 -- Start background camera status refresh (caches hs.camera data every 5s)
@@ -60,16 +68,6 @@ server.start()
 -- respect env vars when launched via Finder/Dock, so we handle it
 -- separately by relaunching with --args when it launches without the port.
 hs.execute('launchctl setenv WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS "--remote-debugging-port=9223"')
-
--- Background refresh of Slack/Teams unread counts.
--- Uses a wrapper shell script that properly backgrounds and detaches the node
--- processes, so hs.execute returns immediately without blocking the main thread.
--- Each script writes JSON to a temp file that the providers read instantly.
-local REFRESH_SCRIPT = hs.configdir .. "/scripts/refresh_attention.sh"
-
-local function refreshAttentionBackground()
-    hs.execute('"' .. REFRESH_SCRIPT .. '"')
-end
 
 -- Ensure Slack has its debug port. If it's running without port 9222,
 -- kill and relaunch with --remote-debugging-port=9222 via open --args.
@@ -100,46 +98,51 @@ local function ensureSlackDebugPort()
 end
 
 -- Timer intervals (seconds) for app-launch settling sequence.
--- Slack needs debug port setup first; Teams just needs cache refresh.
+-- After an app launches, we mark it "loading", wait for it to settle,
+-- then trigger an immediate refresh to get real data ASAP.
 local SLACK_DEBUG_PORT_DELAY = 3    -- wait for Slack process to stabilize before port check
-local SLACK_FIRST_REFRESH    = 10   -- first cache refresh after Slack settles
+local SLACK_FIRST_REFRESH    = 10   -- first provider refresh after Slack settles
 local SLACK_SECOND_REFRESH   = 18   -- second refresh (Slack UI can be slow to populate)
-local SLACK_UI_UPDATE        = 22   -- trigger attention UI update after cache is warm
-local TEAMS_FIRST_REFRESH    = 5    -- first cache refresh after Teams settles
+local TEAMS_FIRST_REFRESH    = 5    -- first provider refresh after Teams settles
 local TEAMS_SECOND_REFRESH   = 10   -- second refresh for Teams
-local TEAMS_UI_UPDATE        = 13   -- trigger attention UI update for Teams
-local INITIAL_REFRESH_DELAY  = 8    -- initial background refresh after Hammerspoon starts
-local REFRESH_INTERVAL       = 60   -- ongoing background refresh interval
+local OUTLOOK_SETTLE_DELAY   = 8    -- wait for Outlook AX tree to be ready
+local MESSAGES_SETTLE_DELAY  = 5    -- wait for Chrome tab to load before JXA probe
 
--- Start background refresh cycle
-local attentionRefreshTimer = hs.timer.doAfter(INITIAL_REFRESH_DELAY, refreshAttentionBackground)
-local attentionRefreshInterval = hs.timer.doEvery(REFRESH_INTERVAL, refreshAttentionBackground)
-
--- When Slack or Teams launches, refresh cache files after the app settles,
--- then trigger an immediate attention refresh to update the UI.
-local appWatcher = hs.application.watcher.new(function(appName, event)
+-- When a watched app launches, mark it loading, then refresh after it settles.
+-- When it terminates, mark it not running immediately.
+-- The per-provider timers (started by attention.start()) will keep refreshing
+-- data on their own intervals after the initial settle sequence.
+_G._retained.appWatcher = hs.application.watcher.new(function(appName, event)
     if event == hs.application.watcher.launched then
         if appName == "Slack" then
             attention.markLoading("slack")
             hs.timer.doAfter(SLACK_DEBUG_PORT_DELAY, ensureSlackDebugPort)
-            hs.timer.doAfter(SLACK_FIRST_REFRESH, refreshAttentionBackground)
-            hs.timer.doAfter(SLACK_SECOND_REFRESH, refreshAttentionBackground)
-            hs.timer.doAfter(SLACK_UI_UPDATE, attention.refreshNow)
+            hs.timer.doAfter(SLACK_FIRST_REFRESH, function() attention.refreshProvider("slack") end)
+            hs.timer.doAfter(SLACK_SECOND_REFRESH, function() attention.refreshProvider("slack") end)
         elseif appName == "Microsoft Teams" or appName == "MSTeams" then
             attention.markLoading("teams")
-            hs.timer.doAfter(TEAMS_FIRST_REFRESH, refreshAttentionBackground)
-            hs.timer.doAfter(TEAMS_SECOND_REFRESH, refreshAttentionBackground)
-            hs.timer.doAfter(TEAMS_UI_UPDATE, attention.refreshNow)
+            hs.timer.doAfter(TEAMS_FIRST_REFRESH, function() attention.refreshProvider("teams") end)
+            hs.timer.doAfter(TEAMS_SECOND_REFRESH, function() attention.refreshProvider("teams") end)
+        elseif appName == "Microsoft Outlook" then
+            attention.markLoading("outlook")
+            hs.timer.doAfter(OUTLOOK_SETTLE_DELAY, function() attention.refreshProvider("outlook") end)
+        elseif appName == "Google Chrome" then
+            attention.markLoading("messages")
+            hs.timer.doAfter(MESSAGES_SETTLE_DELAY, function() attention.refreshProvider("messages") end)
         end
     elseif event == hs.application.watcher.terminated then
         if appName == "Slack" and not slackRelaunching then
             attention.markNotRunning("slack")
         elseif (appName == "Microsoft Teams" or appName == "MSTeams") then
             attention.markNotRunning("teams")
+        elseif appName == "Microsoft Outlook" then
+            attention.markNotRunning("outlook")
+        elseif appName == "Google Chrome" then
+            attention.markNotRunning("messages")
         end
     end
 end)
-appWatcher:start()
+_G._retained.appWatcher:start()
 
 -- Global Hotkey Bindings (Mac keyboard backups)
 -- Hyper Key = Cmd + Alt + Ctrl + Shift

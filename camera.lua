@@ -1,7 +1,8 @@
 -- camera.lua: Camera status detection via hs.camera
--- Uses Hammerspoon's built-in hs.camera module for reliable camera status.
--- Polls every 5 seconds (hs.camera's per-camera property watchers can be
--- unreliable across macOS versions, so polling is the safe approach).
+-- Uses Hammerspoon's built-in hs.camera module. Polls every 2 seconds
+-- for reliable detection across all apps (Teams WebView2, Zoom, etc).
+-- hs.camera's per-camera property watchers can be unreliable across
+-- macOS versions, so polling is the safe approach.
 
 local camera = {}
 
@@ -48,9 +49,15 @@ function camera.getStatus()
     return cachedStatus
 end
 
+-- Force an immediate refresh (called after camera toggle action).
+function camera.refresh()
+    refresh()
+end
+
 function camera.start()
     hs.timer.doAfter(3, refresh)
-    refreshTimer = hs.timer.doEvery(5, refresh)
+    -- Poll every 2 seconds for faster camera state updates
+    refreshTimer = hs.timer.doEvery(2, refresh)
 end
 
 return camera
