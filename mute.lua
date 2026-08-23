@@ -104,9 +104,15 @@ local function hideMutedPill()
     end
 end
 
+-- Intended mute state. Tracked so the device watcher below can re-apply
+-- muting when a new input device appears (e.g. AirPods connecting) while
+-- muted — otherwise the new device's mic would be live.
+local mutedState = false
+
 -- Mute ALL input devices using hardware muting + volume = 0 as backup.
 -- Saves each device's current volume for later restoration.
 local function muteAllInputs()
+    mutedState = true
     savedInputVolumes = {}
     for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
         local vol = dev:inputVolume() or 0
@@ -122,6 +128,7 @@ end
 
 -- Unmute ALL input devices using hardware unmute + volume restoration.
 local function unmuteAllInputs()
+    mutedState = false
     for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
         local key = dev:uid() or dev:name()
         local restoreVol = savedInputVolumes[key] or DEFAULT_INPUT_VOLUME
@@ -183,5 +190,33 @@ function mute.stopTalk()
     hs.timer.doAfter(0, function() showFlashHUD(true) end)
     return true
 end
+
+-- Re-apply muting to all inputs without resetting saved volumes.
+-- New devices get their volume saved (if not already known) so unmute
+-- can restore them properly.
+local function reapplyMute()
+    for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
+        local key = dev:uid() or dev:name()
+        local vol = dev:inputVolume() or 0
+        if vol > 0 and savedInputVolumes[key] == nil then
+            savedInputVolumes[key] = vol
+        end
+        dev:setInputMuted(true)
+        dev:setInputVolume(0)
+    end
+end
+
+-- Watch for audio device changes: if a device is added or the default
+-- input switches while muted, mute the new device too. Without this, a
+-- newly connected mic (e.g. AirPods) would be live while the UI says muted.
+hs.audiodevice.watcher.setCallback(function(event)
+    if (event == "dev#" or event == "dIn ") and mutedState then
+        -- Defer slightly so the new device is fully registered with CoreAudio
+        hs.timer.doAfter(0.5, function()
+            if mutedState then reapplyMute() end
+        end)
+    end
+end)
+hs.audiodevice.watcher.start()
 
 return mute

@@ -1,7 +1,13 @@
 -- Load environment variables from .env before anything else
 require("env").load()
 
--- Auto-reload Hammerspoon config on file save
+-- Auto-reload Hammerspoon config on file save.
+-- Debounced: rapid successive saves (e.g. an editor or tool writing
+-- several files) coalesce into one reload. Back-to-back reloads while
+-- async tasks are in flight can segfault Hammerspoon.
+local RELOAD_DEBOUNCE_SECS = 1.5
+local pendingReload = nil
+
 local function reloadConfig(files)
     local doReload = false
     for _, file in ipairs(files) do
@@ -11,7 +17,8 @@ local function reloadConfig(files)
         end
     end
     if doReload then
-        hs.reload()
+        if pendingReload then pendingReload:stop() end
+        pendingReload = hs.timer.doAfter(RELOAD_DEBOUNCE_SECS, hs.reload)
     end
 end
 
@@ -57,9 +64,10 @@ attention.start()
 -- Start background camera status refresh (caches hs.camera data every 5s)
 camera.start()
 
--- Start calendar and weather refresh
+-- Start calendar, weather, and spotify status refresh
 calendar.start()
 weather.start()
+spotify.start()
 
 -- Start Stream Deck HTTP Server on port 8080
 server.start()

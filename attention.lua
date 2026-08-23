@@ -47,7 +47,12 @@ local function refreshProvider(appId)
     if ok and type(result) == "table" then
         cachedState[appId] = result
     else
-        local f = io.open("/tmp/attention_debug.log", "a")
+        -- Truncate the debug log if it grows past 256KB so it can't
+        -- fill /tmp during a long-running error condition.
+        local logPath = "/tmp/attention_debug.log"
+        local attrs = hs.fs.attributes(logPath)
+        local mode = (attrs and attrs.size and attrs.size > 262144) and "w" or "a"
+        local f = io.open(logPath, mode)
         if f then
             f:write(os.date("%H:%M:%S") .. " provider " .. appId .. " error: " .. tostring(result) .. "\n")
             f:close()
