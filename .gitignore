@@ -1,6 +1,11 @@
 # Environment
 .env
 
+# TLS material — never commit private keys
+server.key
+server.crt
+server.p12
+
 # Node
 node_modules/
 package-lock.json
