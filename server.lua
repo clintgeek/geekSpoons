@@ -239,8 +239,13 @@ end
 function server.start()
     if httpServer then httpServer:stop() end
 
-    -- Start HTTP Server on 8080
+    -- Start HTTP Server on 8080, loopback only. nginx (hs.clintgeek.com)
+    -- is the network-facing boundary: it terminates HTTPS and restricts
+    -- clients to the home LAN, then proxies to 127.0.0.1:8080. Without
+    -- setInterface, hs.httpserver binds all interfaces and LAN devices
+    -- could bypass nginx entirely.
     httpServer = hs.httpserver.new(false, true)
+    httpServer:setInterface("loopback")
     httpServer:setName("Hammerspoon Stream Deck")
     httpServer:setPort(port)
     httpServer:setCallback(handleRequest)
