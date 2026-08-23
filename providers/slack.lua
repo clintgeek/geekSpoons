@@ -6,15 +6,19 @@
 
 local slack = {}
 
+local nodebin = require("nodebin")
+
 local CACHE_FILE = "/tmp/slack_attention.json"
 local ROOT_STATE = os.getenv("HOME") .. "/Library/Application Support/Slack/storage/root-state.json"
 local REFRESH_SCRIPT = hs.configdir .. "/scripts/slack_unread.js"
-local NODE_BIN = os.getenv("NODE_BIN_PATH") or "node"
 
 -- Launch the node script in the background to refresh the cache file.
--- Fully detached so it doesn't block the Lua thread.
+-- Fully detached so it doesn't block the Lua thread. Writes to a temp
+-- file then moves it into place so readers never see a partial write.
 local function refreshCache()
-    hs.execute('"' .. NODE_BIN .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >' .. CACHE_FILE .. ' 2>/dev/null &')
+    local node = nodebin.path()
+    if not node then return end
+    hs.execute('"' .. node .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >"' .. CACHE_FILE .. '.tmp" 2>/dev/null && mv -f "' .. CACHE_FILE .. '.tmp" "' .. CACHE_FILE .. '" &')
 end
 
 function slack.getAttention()

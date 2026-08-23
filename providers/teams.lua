@@ -6,9 +6,10 @@
 
 local teams = {}
 
+local nodebin = require("nodebin")
+
 local CACHE_FILE = "/tmp/teams_attention.json"
 local REFRESH_SCRIPT = hs.configdir .. "/scripts/teams_unread.js"
-local NODE_BIN = os.getenv("NODE_BIN_PATH") or "node"
 
 -- Build the attention result from cached counts (people, meetings, channels).
 -- DMs from people are urgent; everything else is attention-level.
@@ -93,9 +94,12 @@ local function readDockBadge()
 end
 
 -- Launch the node script in the background to refresh the cache file.
--- Fully detached so it doesn't block the Lua thread.
+-- Fully detached so it doesn't block the Lua thread. Writes to a temp
+-- file then moves it into place so readers never see a partial write.
 local function refreshCache()
-    hs.execute('"' .. NODE_BIN .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >' .. CACHE_FILE .. ' 2>/dev/null &')
+    local node = nodebin.path()
+    if not node then return end
+    hs.execute('"' .. node .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >"' .. CACHE_FILE .. '.tmp" 2>/dev/null && mv -f "' .. CACHE_FILE .. '.tmp" "' .. CACHE_FILE .. '" &')
 end
 
 function teams.getAttention()
