@@ -62,25 +62,45 @@ local function parseUnreadCount(desc)
     return nil
 end
 
-function outlook.getAttention()
-    local app = hs.application.find("Microsoft Outlook")
-    if not app then
-        return { severity = "unreadable", count = 0, label = "not running" }
-    end
+-- The AX query is slow (200+ element BFS), so it runs asynchronously in
+-- an osascript subprocess and updates this cache; getAttention() kicks
+-- off a refresh (if one isn't in flight) and returns the cached result.
+local cachedResult = { severity = "none", count = 0, label = "" }
+local taskRef = nil -- keep hs.task alive so GC doesn't collect it mid-run
 
-    -- Try AX tree (works with old Outlook; new Outlook returns "NOWINDOW")
-    local ok, result = hs.osascript.applescript(INBOX_AX_QUERY)
-    if ok and result and result ~= "NOTFOUND" and result ~= "NOWINDOW" then
-        local count = parseUnreadCount(result)
+local function buildResult(queryOutput)
+    -- AX available (old Outlook): parse the Inbox unread count
+    if queryOutput and queryOutput ~= "" and queryOutput ~= "NOTFOUND" and queryOutput ~= "NOWINDOW" then
+        local count = parseUnreadCount(queryOutput)
         if count and count > 0 then
             return { severity = "attention", count = count, label = count .. " unread" }
         end
-        -- AX found Inbox with 0 unread
         return { severity = "none", count = 0, label = "" }
     end
-
     -- AX tree not available (new Outlook or window not visible) — just show running
     return { severity = "none", count = 0, label = "" }
+end
+
+function outlook.getAttention()
+    local app = hs.application.find("Microsoft Outlook")
+    if not app then
+        cachedResult = { severity = "unreadable", count = 0, label = "not running" }
+        return cachedResult
+    end
+
+    if not taskRef then
+        taskRef = hs.task.new("/usr/bin/osascript", function(exitCode, stdOut, stdErr)
+            taskRef = nil
+            if exitCode == 0 then
+                cachedResult = buildResult(stdOut and stdOut:gsub("%s+$", "") or "")
+            end
+            -- Non-zero exit (e.g. Outlook quit mid-query): keep the last
+            -- cached result; the "not running" case above handles quits.
+        end, { "-e", INBOX_AX_QUERY })
+        taskRef:start()
+    end
+
+    return cachedResult
 end
 
 return outlook

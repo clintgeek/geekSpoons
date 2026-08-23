@@ -11,8 +11,13 @@
 
 local messages = {}
 
-function messages.getAttention()
-    local script = [[
+-- The JXA Chrome probe is slow (~500ms), so it runs asynchronously in an
+-- osascript subprocess and updates this cache; getAttention() kicks off
+-- a refresh (if one isn't in flight) and returns the cached result.
+local cachedResult = { severity = "unreadable", count = 0, label = "no data" }
+local taskRef = nil -- keep hs.task alive so GC doesn't collect it mid-run
+
+local JXA_SCRIPT = [[
 function run() {
     var chrome = Application("Google Chrome");
     var windows = chrome.windows();
@@ -34,17 +39,7 @@ function run() {
 }
 ]]
 
-    local ok, appleOK, result = pcall(hs.osascript.javascript, script)
-    if not ok or not appleOK then
-        -- JXA itself failed — Chrome may not be running or doesn't have
-        -- "Allow JavaScript from Apple Events" enabled
-        local app = hs.application.get("Google Chrome")
-        if app and app:isRunning() then
-            return { severity = "unreadable", count = 0, label = "enable JS in Chrome" }
-        end
-        return { severity = "unreadable", count = 0, label = "not running" }
-    end
-
+local function buildResult(result)
     if result and result:match("^FOUND:(.+)$") then
         local count = tonumber(result:match("^FOUND:(.+)$")) or 0
         if count > 0 then
@@ -63,6 +58,29 @@ function run() {
     end
 
     return { severity = "unreadable", count = 0, label = "no Messages tab" }
+end
+
+function messages.getAttention()
+    if not taskRef then
+        taskRef = hs.task.new("/usr/bin/osascript", function(exitCode, stdOut, stdErr)
+            taskRef = nil
+            if exitCode ~= 0 then
+                -- JXA itself failed — Chrome may not be running or doesn't
+                -- have "Allow JavaScript from Apple Events" enabled
+                local app = hs.application.get("Google Chrome")
+                if app and app:isRunning() then
+                    cachedResult = { severity = "unreadable", count = 0, label = "enable JS in Chrome" }
+                else
+                    cachedResult = { severity = "unreadable", count = 0, label = "not running" }
+                end
+                return
+            end
+            cachedResult = buildResult(stdOut and stdOut:gsub("%s+$", "") or "")
+        end, { "-l", "JavaScript", "-e", JXA_SCRIPT })
+        taskRef:start()
+    end
+
+    return cachedResult
 end
 
 return messages
