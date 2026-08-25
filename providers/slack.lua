@@ -1,10 +1,23 @@
 -- providers/slack.lua: Slack attention provider
 -- Reads cached unread counts from a temp file populated by a background node
 -- script that connects to Slack's Chrome DevTools Protocol on port 9222.
--- The provider triggers the node script on every refresh (non-blocking via
--- hs.execute with detached shell), then reads the cache file.
+-- The provider triggers the node script on every refresh (asynchronously via
+-- hs.task), then reads the cache file.
 
 local slack = {}
+
+-- Look this app up by bundle ID, never by name. hs.application.get()/find()
+-- search by name with exact=false, and when nothing matches they fall through
+-- to hs.window.find(), which calls allWindows() on *every* running
+-- application -- a synchronous Accessibility IPC round-trip each. So the
+-- "app isn't running" case, which this provider hits routinely, blocked
+-- Hammerspoon's main thread for over a second every refresh and starved the
+-- HTTP server. applicationsForBundleID() never does the window sweep.
+local function findApp(bundleID)
+    return hs.application.applicationsForBundleID(bundleID)[1]
+end
+
+local SLACK_BUNDLE_ID = "com.tinyspeck.slackmacgap"
 
 local nodebin = require("nodebin")
 
@@ -12,17 +25,35 @@ local CACHE_FILE = "/tmp/slack_attention.json"
 local ROOT_STATE = os.getenv("HOME") .. "/Library/Application Support/Slack/storage/root-state.json"
 local REFRESH_SCRIPT = hs.configdir .. "/scripts/slack_unread.js"
 
--- Launch the node script in the background to refresh the cache file.
--- Fully detached so it doesn't block the Lua thread. Writes to a temp
--- file then moves it into place so readers never see a partial write.
+-- Launch the node script to refresh the cache file, asynchronously.
+-- hs.task, not hs.execute. hs.execute pipes the command through io.popen
+-- and reads to EOF, and a trailing "&" does not help: the backgrounded
+-- subshell inherits the pipe's write end, so the read blocks until the whole
+-- chain exits. The node script takes ~3s, and that was 3s of Hammerspoon's
+-- main thread — which the HTTP server needs, since every request is
+-- dispatched synchronously onto the main queue. hs.task is genuinely async.
+local taskRef = nil -- keep the task alive so GC doesn't collect it mid-run
+
 local function refreshCache()
+    if taskRef then return end -- refresh already in flight
     local node = nodebin.path()
     if not node then return end
-    hs.execute('"' .. node .. '" "' .. REFRESH_SCRIPT .. '" </dev/null >"' .. CACHE_FILE .. '.tmp" 2>/dev/null && mv -f "' .. CACHE_FILE .. '.tmp" "' .. CACHE_FILE .. '" &')
+    taskRef = hs.task.new(node, function(exitCode, stdOut, stdErr)
+        taskRef = nil
+        if exitCode ~= 0 or not stdOut or stdOut == "" then return end
+        -- Write to a temp file and rename so readers never see a partial write.
+        local tmp = CACHE_FILE .. ".tmp"
+        local f = io.open(tmp, "w")
+        if not f then return end
+        f:write(stdOut)
+        f:close()
+        os.rename(tmp, CACHE_FILE)
+    end, { REFRESH_SCRIPT })
+    taskRef:start()
 end
 
 function slack.getAttention()
-    local app = hs.application.get("Slack")
+    local app = findApp(SLACK_BUNDLE_ID)
     if not app then
         return { severity = "unreadable", count = 0, label = "not running" }
     end

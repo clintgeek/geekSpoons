@@ -47,6 +47,46 @@ apps.config = {
     }
 }
 
+-- Find a running instance of a configured app without triggering an
+-- Accessibility window sweep. hs.application.get()/find() search by name with
+-- exact=false, and on a miss they fall through to hs.window.find(), which calls
+-- allWindows() on every running app -- ~1.5s of synchronous AX IPC here. That
+-- miss is the common case: waitForWindow() polls every 0.2-0.3s for an app that
+-- hasn't appeared yet, and config.name doesn't always match the running process
+-- (Microsoft Teams runs as "MSTeams"). The sweeps took longer than the poll
+-- interval, so they queued and starved the HTTP server for the whole launch.
+-- Resolving the bundle ID from the app's own Info.plist is a cheap file read,
+-- cached, and applicationsForBundleID() never sweeps.
+local bundleIDCache = {}
+
+local function bundleIDFor(config)
+    local cached = bundleIDCache[config.path]
+    if cached ~= nil then return cached or nil end
+    local info = hs.application.infoForBundlePath(config.path)
+    local id = (info and info.CFBundleIdentifier) or false
+    bundleIDCache[config.path] = id
+    return id or nil
+end
+
+-- Exact-name match over the running app list. Used only when the bundle path
+-- can't be read (app moved or not installed). Still no AX calls.
+local function runningAppNamed(name)
+    if not name then return nil end
+    for _, a in ipairs(hs.application.runningApplications()) do
+        if a:name() == name then return a end
+    end
+    return nil
+end
+
+local function getRunningApp(config)
+    local id = bundleIDFor(config)
+    if id then
+        local a = hs.application.applicationsForBundleID(id)[1]
+        if a then return a end
+    end
+    return runningAppNamed(config.name)
+end
+
 -- Find the first standard window of an app, or fall back to the first window.
 local function findMainWindow(app)
     local windows = app:allWindows()
@@ -66,7 +106,7 @@ local function waitForWindow(config, interval, maxAttempts)
     local timer
     timer = hs.timer.doEvery(interval, function()
         attempts = attempts + 1
-        local a = hs.application.get(config.name)
+        local a = getRunningApp(config)
         if a then
             local w = a:mainWindow() or (a:allWindows() and a:allWindows()[1])
             if w then
@@ -108,7 +148,7 @@ function apps.smartLaunch(appKey)
         return
     end
 
-    local app = hs.application.get(config.name) or hs.application.get(config.path)
+    local app = getRunningApp(config)
 
     if app and app:isRunning() then
         local win = findMainWindow(app)

@@ -1,10 +1,20 @@
 -- spotify.lua: Robust Spotify integration module with GEEKAMP v6.78 metadata
 local spotify = {}
 
+-- Look Spotify up by bundle ID, never by name. hs.application.get() searches
+-- by name with exact=false, and when nothing matches it falls through to
+-- hs.window.find(), which calls allWindows() on *every* running application.
+-- Each of those is a synchronous Accessibility IPC round-trip, so a name
+-- lookup for an app that isn't running blocks Hammerspoon's main thread for
+-- over a second. This runs every STATUS_REFRESH_INTERVAL seconds, so with
+-- Spotify closed it starved the HTTP server and the dashboard lost its
+-- connection. applicationsForBundleID() never does the window sweep.
+local SPOTIFY_BUNDLE_ID = "com.spotify.client"
+
 local function getSpotifyApp()
-    -- Use hs.application to find Spotify without triggering a launch.
-    -- We also require a main window so we don't talk to an app mid-quit.
-    local app = hs.application.get("Spotify")
+    -- Find Spotify without triggering a launch. We also require a main
+    -- window so we don't talk to an app mid-quit.
+    local app = hs.application.applicationsForBundleID(SPOTIFY_BUNDLE_ID)[1]
     if app and app:isRunning() and app:mainWindow() then
         return app
     end

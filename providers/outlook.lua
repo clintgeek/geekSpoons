@@ -13,6 +13,19 @@
 
 local outlook = {}
 
+-- Look this app up by bundle ID, never by name. hs.application.get()/find()
+-- search by name with exact=false, and when nothing matches they fall through
+-- to hs.window.find(), which calls allWindows() on *every* running
+-- application -- a synchronous Accessibility IPC round-trip each. So the
+-- "app isn't running" case, which this provider hits routinely, blocked
+-- Hammerspoon's main thread for over a second every refresh and starved the
+-- HTTP server. applicationsForBundleID() never does the window sweep.
+local function findApp(bundleID)
+    return hs.application.applicationsForBundleID(bundleID)[1]
+end
+
+local OUTLOOK_BUNDLE_ID = "com.microsoft.Outlook"
+
 -- AppleScript to find the Inbox folder's description in Outlook's AX tree.
 -- Breadth-first search capped at 200 elements. Returns the description string,
 -- "NOTFOUND" if no Inbox cell, or "NOWINDOW" if the AX tree has no windows.
@@ -82,7 +95,7 @@ local function buildResult(queryOutput)
 end
 
 function outlook.getAttention()
-    local app = hs.application.find("Microsoft Outlook")
+    local app = findApp(OUTLOOK_BUNDLE_ID)
     if not app then
         cachedResult = { severity = "unreadable", count = 0, label = "not running" }
         return cachedResult

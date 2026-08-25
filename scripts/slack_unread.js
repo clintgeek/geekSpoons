@@ -74,7 +74,10 @@ async function getUnreadCount() {
         console.log(JSON.stringify({error: err.message, channels: 0, dms: 0, badges: 0}));
     });
     
-    setTimeout(() => { ws.close(); process.exit(0); }, TIMEOUT_MS);
+    // unref the watchdog so it can't hold the event loop open. Without this
+    // the process always lived the full TIMEOUT_MS even after ws.close(),
+    // making every refresh take the worst-case time instead of the actual one.
+    setTimeout(() => { ws.close(); process.exit(0); }, TIMEOUT_MS).unref();
 }
 
 getUnreadCount().catch(e => console.log(JSON.stringify({error: e.message, channels: 0, dms: 0, badges: 0})));

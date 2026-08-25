@@ -17,15 +17,19 @@ function checkTreeItemCount(wsUrl) {
                 params: { expression: 'document.querySelectorAll("[role=treeitem]").length', returnByValue: true }
             }));
         });
+        // Clear the probe watchdog once the probe settles. Left pending it
+        // holds the event loop open for the full PROBE_TIMEOUT_MS, so every
+        // probe cost worst-case time even when it answered immediately.
+        const watchdog = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, PROBE_TIMEOUT_MS);
         ws.on('message', (data) => {
             const msg = JSON.parse(data);
             if (msg.id === 1) {
+                clearTimeout(watchdog);
                 resolve(msg.result && msg.result.result && msg.result.result.value || 0);
                 ws.close();
             }
         });
-        ws.on('error', reject);
-        setTimeout(() => { ws.close(); reject(new Error('timeout')); }, PROBE_TIMEOUT_MS);
+        ws.on('error', (err) => { clearTimeout(watchdog); reject(err); });
     });
 }
 
@@ -128,7 +132,10 @@ async function getUnreadCount() {
         console.log(JSON.stringify({error: err.message, people: 0, meetings: 0, channels: 0}));
     });
 
-    setTimeout(() => { ws.close(); process.exit(0); }, TIMEOUT_MS);
+    // unref the watchdog so it can't hold the event loop open. Without this
+    // the process always lived the full TIMEOUT_MS even after ws.close(),
+    // making every refresh take the worst-case time instead of the actual one.
+    setTimeout(() => { ws.close(); process.exit(0); }, TIMEOUT_MS).unref();
 }
 
 getUnreadCount().catch(e => console.log(JSON.stringify({error: e.message, people: 0, meetings: 0, channels: 0})));

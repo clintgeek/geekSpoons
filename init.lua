@@ -49,6 +49,7 @@ local slackProvider = require("providers.slack")
 local teamsProvider = require("providers.teams")
 local messagesProvider = require("providers.messages")
 local server = require("server")
+local smbmount = require("smbmount")
 
 -- Register attention providers
 attention.register("outlook", outlookProvider.getAttention)
@@ -68,6 +69,8 @@ camera.start()
 calendar.start()
 weather.start()
 spotify.start()
+
+smbmount.start()
 
 -- Start Stream Deck HTTP Server on port 8080
 server.start()

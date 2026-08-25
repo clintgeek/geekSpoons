@@ -181,10 +181,17 @@ local function handleRequest(method, path, headers, body)
             audio_mute     = function() return {audioMuted = audio.toggleMute()} end,
             cam_toggle     = function()
                 meeting.toggleCamera()
-                -- Wait briefly for the camera state to settle, then refresh
-                -- and return the new state so the frontend updates immediately
-                hs.timer.doAfter(1.5, function() camera.refresh() end)
-                return {camera = camera.getStatus()}
+                -- macOS takes a moment to report the camera as in use, so poll
+                -- the state a few times across the settle window instead of
+                -- once at 1.5s -- that lands the new state as soon as it's
+                -- available rather than always waiting for the worst case.
+                for _, delay in ipairs({0.3, 0.7, 1.2, 2.0}) do
+                    hs.timer.doAfter(delay, function() camera.refresh() end)
+                end
+                -- Deliberately no camera state in the response: at this point
+                -- it is still the pre-toggle value, and returning it made the
+                -- frontend repaint the old state before the refresh landed.
+                return {}
             end,
         }
 

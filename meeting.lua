@@ -3,40 +3,49 @@ local meeting = {}
 
 local mute = require("mute")
 
+-- Meeting apps in priority order, with the camera-toggle shortcut each one uses.
+-- Apps are identified by bundle ID, never by name. hs.application.get() searches
+-- by name with exact=false, and on a miss it falls through to hs.window.find(),
+-- which calls allWindows() on every running app -- a synchronous Accessibility
+-- IPC round-trip each, ~1.5s in total on this machine. The old code did nine
+-- name lookups up front, five of which missed (notably "Microsoft Teams": the
+-- running app is actually named "MSTeams"), so a camera toggle spent ~7s in AX
+-- sweeps before it sent a single keystroke. applicationsForBundleID() never
+-- sweeps, and the list below is walked lazily so we stop at the first match.
+local MEETING_APPS = {
+    { label = "Zoom",   mods = {"cmd", "shift"}, key = "V",
+      bundleIDs = {"us.zoom.xos"} },
+    { label = "Teams",  mods = {"cmd", "shift"}, key = "O",
+      bundleIDs = {"com.microsoft.teams2", "com.microsoft.teams"} },
+    { label = "Slack",  mods = {"cmd", "shift"}, key = "V",
+      bundleIDs = {"com.tinyspeck.slackmacgap"} },
+    { label = "Webex",  mods = {"cmd", "shift"}, key = "V",
+      bundleIDs = {"Cisco-Systems.Spark", "com.webex.meetingmanager"} },
+    { label = "Meet",   mods = {"cmd"},          key = "E",
+      bundleIDs = {"com.google.Chrome"} },
+}
+
+local function findRunning(bundleIDs)
+    for _, id in ipairs(bundleIDs) do
+        local app = hs.application.applicationsForBundleID(id)[1]
+        if app and app:isRunning() then return app end
+    end
+    return nil
+end
+
 -- Smart Camera Toggle for active meeting app
 function meeting.toggleCamera()
-    -- Check running meeting applications
-    local zoom = hs.application.get("zoom.us") or hs.application.get("Zoom")
-    local teams = hs.application.get("Microsoft Teams") or hs.application.get("Teams")
-    local slack = hs.application.get("Slack")
-    local chrome = hs.application.get("Google Chrome")
-    local webex = hs.application.get("Cisco Webex Meetings") or hs.application.get("Webex")
-
-    if zoom and zoom:isRunning() then
-        -- Zoom shortcut: Cmd + Shift + V
-        hs.eventtap.keyStroke({"cmd", "shift"}, "V", 0, zoom)
-        hs.alert.show("📹 Zoom Camera Toggled", 1)
-    elseif teams and teams:isRunning() then
-        -- Teams shortcut: Cmd + Shift + O
-        hs.eventtap.keyStroke({"cmd", "shift"}, "O", 0, teams)
-        hs.alert.show("📹 Teams Camera Toggled", 1)
-    elseif slack and slack:isRunning() then
-        -- Slack Huddles shortcut: Cmd + Shift + V
-        hs.eventtap.keyStroke({"cmd", "shift"}, "V", 0, slack)
-        hs.alert.show("📹 Slack Camera Toggled", 1)
-    elseif webex and webex:isRunning() then
-        -- Webex shortcut: Cmd + Shift + V
-        hs.eventtap.keyStroke({"cmd", "shift"}, "V", 0, webex)
-        hs.alert.show("📹 Webex Camera Toggled", 1)
-    elseif chrome and chrome:isRunning() then
-        -- Google Meet (Chrome) shortcut: Cmd + E
-        hs.eventtap.keyStroke({"cmd"}, "E", 0, chrome)
-        hs.alert.show("📹 Meet Camera Toggled", 1)
-    else
-        -- Fallback: Send Cmd + Shift + V to active window
-        hs.eventtap.keyStroke({"cmd", "shift"}, "V")
-        hs.alert.show("📹 Camera Toggled", 1)
+    for _, entry in ipairs(MEETING_APPS) do
+        local app = findRunning(entry.bundleIDs)
+        if app then
+            hs.eventtap.keyStroke(entry.mods, entry.key, 0, app)
+            hs.alert.show("📹 " .. entry.label .. " Camera Toggled", 1)
+            return
+        end
     end
+    -- Fallback: Send Cmd + Shift + V to active window
+    hs.eventtap.keyStroke({"cmd", "shift"}, "V")
+    hs.alert.show("📹 Camera Toggled", 1)
 end
 
 return meeting
