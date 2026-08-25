@@ -1675,7 +1675,26 @@
         }
 
         // --- Actions ---
+        // Repaint the control immediately on tap, before the request goes out.
+        // The round trip over WiFi is only tens of ms, but a button that does
+        // nothing until the response lands reads as lag. The authoritative
+        // value from the response (and the refreshes below) reconciles it, so
+        // a guess that turns out wrong is corrected within a poll or two.
+        function applyOptimisticState(action) {
+            const micBtn = document.getElementById('micBtn');
+            if (action === 'mute_toggle' && micBtn) {
+                applyMicState(!micBtn.classList.contains('muted'));
+            } else if (action === 'audio_mute') {
+                const b = document.getElementById('audioMuteBtn');
+                if (b) applyAudioMuteState(!b.classList.contains('muted'));
+            } else if (action === 'cam_toggle') {
+                const camBtn = document.getElementById('camBtn');
+                if (camBtn) updateCamera({ inUse: !camBtn.classList.contains('live'), blocked: false });
+            }
+        }
+
         function triggerAction(action) {
+            applyOptimisticState(action);
             fetch('/api/action/' + action, { method: 'POST', body: '{}' })
                 .then(r => r.json())
                 .then(data => {
@@ -1684,11 +1703,12 @@
                     if (data && data.camera !== undefined) updateCamera(data.camera);
                 })
                 .catch(e => console.log('Action failed:', e));
-            setTimeout(updateStatus, 300);
-            // Camera toggle takes ~1.5s to settle on the server side;
-            // refresh again to pick up the updated camera state
+            setTimeout(() => updateStatus(false), 300);
+            // macOS is slow to report a camera as in use, and the server
+            // re-checks across a ~2s settle window, so keep refreshing to pick
+            // up the real state as soon as it appears.
             if (action === 'cam_toggle') {
-                setTimeout(updateStatus, 2000);
+                [800, 1400, 2200].forEach(d => setTimeout(() => updateStatus(false), d));
             }
         }
 
@@ -1697,6 +1717,7 @@
         if (talkBtn) {
             const startTalk = () => {
                 talkBtn.classList.add('pushed');
+                applyMicState(false); // push-to-talk goes live immediately
                 fetch('/api/action/talk_start', { method: 'POST', body: '{}' })
                     .then(r => r.json())
                     .then(data => { if (data && data.micMuted !== undefined) applyMicState(data.micMuted); })
@@ -1705,6 +1726,7 @@
             const stopTalk = () => {
                 if (!talkBtn.classList.contains('pushed')) return;
                 talkBtn.classList.remove('pushed');
+                applyMicState(true); // released -> back to muted
                 fetch('/api/action/talk_stop', { method: 'POST', body: '{}' })
                     .then(r => r.json())
                     .then(data => { if (data && data.micMuted !== undefined) applyMicState(data.micMuted); })
@@ -1936,9 +1958,33 @@
         // involve more expensive server-side computation.
         let statusFailCount = 0;
         let slowData = { nextUp: null, weather: null };
+        let statusInFlight = false;
+        let statusPending = false;
+        let statusPendingSlow = false;
+        const STATUS_TIMEOUT_MS = 4000;
 
         function updateStatus(includeSlow) {
-            fetch('/api/status')
+            // Guard against overlapping polls. If the server is slow, a 1s
+            // interval stacks requests faster than they complete and each
+            // queued one delays the next, so a brief stall snowballs into
+            // the "connection lost" banner.
+            // A poll that arrives while one is in flight isn't dropped -- it's
+            // remembered and re-run on completion. Dropping it would swallow
+            // the confirming refresh that follows a button press, leaving the
+            // button showing stale state until the next tick.
+            if (statusInFlight) {
+                statusPending = true;
+                if (includeSlow) statusPendingSlow = true;
+                return;
+            }
+            statusInFlight = true;
+
+            // Abort a hung request rather than waiting out the browser's
+            // default timeout, so one stall can't wedge the poll loop.
+            const ctl = new AbortController();
+            const abortTimer = setTimeout(() => ctl.abort(), STATUS_TIMEOUT_MS);
+
+            fetch('/api/status', { signal: ctl.signal })
                 .then(r => {
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
@@ -1969,6 +2015,16 @@
                         document.getElementById('connBanner').style.display = 'block';
                     }
                     console.log('Status error:', err);
+                })
+                .finally(() => {
+                    clearTimeout(abortTimer);
+                    statusInFlight = false;
+                    if (statusPending) {
+                        const slow = statusPendingSlow;
+                        statusPending = false;
+                        statusPendingSlow = false;
+                        updateStatus(slow);
+                    }
                 });
         }
 
@@ -2001,18 +2057,29 @@
         function renderSchedule(schedule) {
             const body = document.getElementById('scheduleModalBody');
             if (!schedule || schedule.length === 0) {
-                body.innerHTML = '<div class="schedule-empty">No events today</div>';
+                body.innerHTML = '<div class="schedule-empty">No upcoming events</div>';
                 return;
             }
             const now = new Date();
+            const today = now.toDateString();
+            const dateFmt = (d) => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeFmt = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             let html = '';
             for (const ev of schedule) {
                 const start = new Date(ev.start);
                 const end = new Date(ev.end);
                 const isNow = start <= now && now < end;
                 const isPast = end < now;
-                const timeStr = start.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) +
-                    '–' + end.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+                let timeStr = '';
+                if (start.toDateString() !== today) {
+                    timeStr += dateFmt(start) + ' ';
+                }
+                timeStr += timeFmt(start);
+                if (end.toDateString() !== start.toDateString()) {
+                    timeStr += '–' + dateFmt(end) + ' ' + timeFmt(end);
+                } else {
+                    timeStr += '–' + timeFmt(end);
+                }
                 const cls = 'schedule-item' + (isNow ? ' now' : isPast ? ' past' : '');
                 const badge = ev.meeting ? '<span class="schedule-badge">' + (ev.meetingType || 'MTG') + '</span>' : '';
                 html += '<div class="' + cls + '">' +
@@ -2100,10 +2167,16 @@
             updateAttention(merged);
         }
 
-        // Fast poll: mic, camera, audio, spotify every 1s
-        setInterval(() => updateStatus(false), 1000);
-        // Slow poll: attention, calendar, weather every 10s
-        setInterval(() => updateStatus(true), 10000);
+        // One poll loop on a tick counter. Two separate intervals (1s and 10s)
+        // collided every tenth second and fired two simultaneous requests for
+        // the same endpoint; a single loop can't overlap with itself.
+        // Fast tick: mic, camera, audio, spotify. Every 10th tick also pulls
+        // the slow data (calendar, weather).
+        let statusTick = 0;
+        setInterval(() => {
+            statusTick++;
+            updateStatus(statusTick % 10 === 0);
+        }, 1000);
         // Initial fetch includes everything
         updateStatus(true);
 
@@ -2152,7 +2225,7 @@
     <div id="scheduleModal" class="modal-overlay" onclick="if(event.target === this) toggleScheduleModal()">
         <div class="modal">
             <div class="modal-header">
-                <span id="scheduleModalTitle">TODAY'S SCHEDULE</span>
+                <span id="scheduleModalTitle">UPCOMING</span>
                 <span class="modal-close" onclick="toggleScheduleModal()">&times;</span>
             </div>
             <div class="modal-body" id="scheduleModalBody">

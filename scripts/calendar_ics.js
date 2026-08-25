@@ -47,37 +47,47 @@ async function main() {
         const parsed = ical.parseICS(ics);
         const now = new Date();
         const candidates = [];
+        const horizon = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
         for (const [key, ev] of Object.entries(parsed)) {
-            if (ev.type !== 'VEVENT' || !ev.start) continue;
+            if (ev.type !== 'VEVENT' || !ev.start || ev.recurrenceid) continue;
 
-            const start = ev.start;
-            const end = ev.end || new Date(start.getTime() + 60 * 60 * 1000);
-
-            if (end < now) continue;
-
-            const joinURL = findMeetingUrl(ev);
-            candidates.push({
-                title: ev.summary || 'Untitled',
-                start: start.toISOString(),
-                end: end.toISOString(),
-                duration: Math.round((end - start) / 60000),
-                source: 'Work',
-                meeting: !!joinURL,
-                meetingType: meetingType(joinURL),
-                joinURL
+            const instances = ical.expandRecurringEvent(ev, {
+                from: now,
+                to: horizon,
+                expandOngoing: true,
+                includeOverrides: true,
+                excludeExdates: true
             });
+            if (!instances || instances.length === 0) continue;
+
+            for (const inst of instances) {
+                const start = inst.start;
+                const end = inst.end || new Date(start.getTime() + 60 * 60 * 1000);
+                const evData = inst.event || ev;
+
+                const joinURL = findMeetingUrl(evData);
+                candidates.push({
+                    title: evData.summary || 'Untitled',
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                    duration: Math.round((end - start) / 60000),
+                    source: 'Work',
+                    meeting: !!joinURL,
+                    meetingType: meetingType(joinURL),
+                    joinURL
+                });
+            }
         }
 
         candidates.sort((a, b) => new Date(a.start) - new Date(b.start));
 
-        // Build today's schedule (events starting today)
-        const todaySchedule = candidates.filter(c => {
+        // Build upcoming schedule (next 5 events, including currently in progress)
+        const upcoming = candidates.filter(c => {
             const s = new Date(c.start);
-            return s.getFullYear() === now.getFullYear() &&
-                   s.getMonth() === now.getMonth() &&
-                   s.getDate() === now.getDate();
-        }).map(c => ({
+            const e = new Date(c.end);
+            return (s <= now && now < e) || s >= now;
+        }).slice(0, 5).map(c => ({
             title: c.title,
             start: c.start,
             end: c.end,
@@ -101,12 +111,12 @@ async function main() {
         }
 
         if (!selected) {
-            console.log(JSON.stringify({ available: false, title: 'No upcoming events', schedule: todaySchedule }));
+            console.log(JSON.stringify({ available: false, title: 'No upcoming events', schedule: upcoming }));
             return;
         }
 
         selected.available = true;
-        selected.schedule = todaySchedule;
+        selected.schedule = upcoming;
         console.log(JSON.stringify(selected));
     } catch (err) {
         console.log(JSON.stringify({ available: false, error: err.message }));
