@@ -120,7 +120,7 @@ local function muteAllInputs()
             savedInputVolumes[dev:uid() or dev:name()] = vol
         end
         -- Try hardware mute first (actually silences the mic)
-        local ok = dev:setInputMuted(true)
+        dev:setInputMuted(true)
         -- Also set volume to 0 as backup for devices that don't support muting
         dev:setInputVolume(0)
     end
