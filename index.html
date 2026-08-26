@@ -1362,6 +1362,15 @@
             color: var(--bg-primary);
         }
 
+        .schedule-day {
+            padding: 8px 14px 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+        }
+
         .schedule-item {
             display: flex;
             align-items: center;
@@ -2061,20 +2070,31 @@
                 return;
             }
             const now = new Date();
-            const today = now.toDateString();
-            const dateFmt = (d) => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const sameDay = (a, b) => a.toDateString() === b.toDateString();
+            const dayLabel = (d) => {
+                if (sameDay(d, now)) return 'Today';
+                if (sameDay(d, tomorrow)) return 'Tomorrow';
+                return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            };
             const timeFmt = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const dateFmt = (d) => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+
             let html = '';
+            let currentDay = null;
             for (const ev of schedule) {
                 const start = new Date(ev.start);
                 const end = new Date(ev.end);
+                const day = dayLabel(start);
+                if (day !== currentDay) {
+                    html += '<div class="schedule-day">' + day + '</div>';
+                    currentDay = day;
+                }
+
                 const isNow = start <= now && now < end;
                 const isPast = end < now;
-                let timeStr = '';
-                if (start.toDateString() !== today) {
-                    timeStr += dateFmt(start) + ' ';
-                }
-                timeStr += timeFmt(start);
+                let timeStr = timeFmt(start);
                 if (end.toDateString() !== start.toDateString()) {
                     timeStr += '–' + dateFmt(end) + ' ' + timeFmt(end);
                 } else {
