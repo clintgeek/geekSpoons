@@ -4,9 +4,20 @@ local apps = {}
 local env = require("env")
 local HOME = env.get("HOME") or ""
 
--- Escape a string for safe use inside double quotes in a shell command.
-local function shellEscape(s)
-    return (s:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('`', '\\`'):gsub('%$', '\\$'))
+-- Fire-and-forget subprocesses, held until they exit so an unreferenced
+-- hs.task can't be collected mid-run. hs.execute and hs.applescript are both
+-- synchronous, and every dashboard request is dispatched onto Hammerspoon's
+-- main queue -- so launching an app used to stall /api/status for its duration.
+local liveTasks = {}
+local nextTaskId = 0
+
+local function runDetached(bin, args)
+    nextTaskId = nextTaskId + 1
+    local id = nextTaskId
+    local task = hs.task.new(bin, function() liveTasks[id] = nil end, args)
+    if not task then return end
+    liveTasks[id] = task
+    task:start()
 end
 
 -- Polling constants
@@ -24,6 +35,11 @@ apps.config = {
         name = "Messages",
         path = env.get("MESSAGES_APP_PATH") or (HOME .. "/Applications/Chrome Apps.localized/Messages.app"),
         matchPath = "Chrome Apps.localized/Messages.app"
+    },
+    outlookweb = {
+        name = "Outlook (PWA)",
+        path = HOME .. "/Applications/Chrome Apps.localized/Outlook (PWA).app",
+        matchPath = "Chrome Apps.localized/Outlook (PWA).app"
     },
     chatgpt = {
         name = "ChatGPT",
@@ -44,6 +60,10 @@ apps.config = {
     firefox = {
         name = "Firefox",
         path = "/Applications/Firefox.app"
+    },
+    managersToolbox = {
+        name = "Manager's Toolbox",
+        path = "/Applications/Manager's Toolbox.app"
     }
 }
 
@@ -108,7 +128,13 @@ local function waitForWindow(config, interval, maxAttempts)
         attempts = attempts + 1
         local a = getRunningApp(config)
         if a then
-            local w = a:mainWindow() or (a:allWindows() and a:allWindows()[1])
+            -- One allWindows() call, not two: each is a synchronous
+            -- Accessibility sweep and this runs every 200-300ms during a launch.
+            local w = a:mainWindow()
+            if not w then
+                local wins = a:allWindows()
+                w = wins and wins[1]
+            end
             if w then
                 w:focus()
                 w:raise()
@@ -123,12 +149,12 @@ end
 -- App is running but has no windows — reopen and wait for a window.
 local function reopenApp(config)
     hs.application.launchOrFocus(config.path)
-    hs.applescript(string.format([[
+    runDetached("/usr/bin/osascript", { "-e", string.format([[
         tell application "%s"
             reopen
             activate
         end tell
-    ]], config.name))
+    ]], config.name) })
     waitForWindow(config, REOPEN_POLL_INTERVAL, REOPEN_MAX_ATTEMPTS)
 end
 
@@ -142,9 +168,11 @@ function apps.smartLaunch(appKey)
     local config = apps.config[appKey]
     if not config then return end
 
-    -- For PWA apps (matchPath), just use `open` — the OS handles focus/launch like Finder
+    -- For PWA apps (matchPath), just use `open` — the OS handles focus/launch
+    -- like Finder. Exec'd directly rather than through a shell, so the path
+    -- needs no quoting or escaping.
     if config.matchPath then
-        hs.execute('open "' .. shellEscape(config.path) .. '"')
+        runDetached("/usr/bin/open", { config.path })
         return
     end
 

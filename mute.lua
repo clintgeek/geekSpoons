@@ -9,9 +9,22 @@ local mute = {}
 
 local flashCanvas = nil      -- brief transition HUD (top center, 2s)
 local mutedPillCanvas = nil  -- persistent pill (bottom-left, stays while muted)
-local savedInputVolumes = {}  -- map of device UID → volume to restore on unmute
 local DEFAULT_INPUT_VOLUME = 73  -- restored when no saved volume exists
 local FLASH_DISPLAY_SECS = 2.0   -- how long the transition flash stays visible
+
+-- Mute state has to outlive a config reload. Saving any .lua file live-reloads
+-- Hammerspoon, which used to reset both of these: unmuting afterwards restored
+-- every device to DEFAULT_INPUT_VOLUME instead of its real prior level, and the
+-- device watcher below stopped re-muting newly connected mics because it
+-- believed the mic wasn't muted.
+local SETTINGS_VOLUMES = "mute.savedInputVolumes"
+local SETTINGS_STATE = "mute.mutedState"
+
+local savedInputVolumes = hs.settings.get(SETTINGS_VOLUMES) or {}  -- device UID → volume
+
+local function persistVolumes()
+    hs.settings.set(SETTINGS_VOLUMES, savedInputVolumes)
+end
 
 -- Brief flash HUD at top center (shown on mute/unmute transitions)
 local function showFlashHUD(isMuted)
@@ -106,13 +119,19 @@ end
 
 -- Intended mute state. Tracked so the device watcher below can re-apply
 -- muting when a new input device appears (e.g. AirPods connecting) while
--- muted — otherwise the new device's mic would be live.
-local mutedState = false
+-- muted — otherwise the new device's mic would be live. Restored across
+-- reloads so a reload while muted doesn't silently disarm the watcher.
+local mutedState = hs.settings.get(SETTINGS_STATE) or false
+
+local function setMutedState(state)
+    mutedState = state
+    hs.settings.set(SETTINGS_STATE, state)
+end
 
 -- Mute ALL input devices using hardware muting + volume = 0 as backup.
 -- Saves each device's current volume for later restoration.
 local function muteAllInputs()
-    mutedState = true
+    setMutedState(true)
     savedInputVolumes = {}
     for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
         local vol = dev:inputVolume() or 0
@@ -124,11 +143,12 @@ local function muteAllInputs()
         -- Also set volume to 0 as backup for devices that don't support muting
         dev:setInputVolume(0)
     end
+    persistVolumes()
 end
 
 -- Unmute ALL input devices using hardware unmute + volume restoration.
 local function unmuteAllInputs()
-    mutedState = false
+    setMutedState(false)
     for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
         local key = dev:uid() or dev:name()
         local restoreVol = savedInputVolumes[key] or DEFAULT_INPUT_VOLUME
@@ -164,18 +184,6 @@ function mute.toggleMute()
     end
 end
 
-function mute.setMute(state)
-    if state then
-        muteAllInputs()
-        showMutedPill()
-    else
-        unmuteAllInputs()
-        hideMutedPill()
-    end
-    hs.timer.doAfter(0, function() showFlashHUD(state) end)
-    return state
-end
-
 -- Push to Talk support
 function mute.startTalk()
     unmuteAllInputs()
@@ -204,6 +212,7 @@ local function reapplyMute()
         dev:setInputMuted(true)
         dev:setInputVolume(0)
     end
+    persistVolumes()
 end
 
 -- Watch for audio device changes: if a device is added or the default

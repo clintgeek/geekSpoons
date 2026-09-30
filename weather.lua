@@ -4,9 +4,16 @@ local env = require("env")
 local WEATHER_LOCATION = env.get("WEATHER_LOCATION") or "Arkadelphia, AR"
 
 local REFRESH_INTERVAL = 10 * 60
+local FETCH_TIMEOUT = 25  -- watchdog; curl's own -m is 15s
 local cachedState = { available = false }
 local refreshTimer = nil
 local running = false
+-- Keep the task referenced until it exits. An unreferenced hs.task can be
+-- collected mid-run, and since `running` is only cleared inside the callback,
+-- a collected task latched the guard below and stopped weather refreshing for
+-- the rest of the session.
+local taskRef = nil
+local watchdog = nil
 
 local WEATHER_BACKGROUNDS = {
     sunny = "https://images.unsplash.com/photo-1601297183305-6df142704ea2?w=800&h=400&fit=crop&q=80",
@@ -39,12 +46,21 @@ local function getWeatherBackground(condition)
     end
 end
 
+local function finish()
+    running = false
+    taskRef = nil
+    if watchdog then
+        watchdog:stop()
+        watchdog = nil
+    end
+end
+
 local function refresh()
     if running then return end
     running = true
 
-    hs.task.new("/usr/bin/curl", function(exitCode, stdOut, stdErr)
-        running = false
+    taskRef = hs.task.new("/usr/bin/curl", function(exitCode, stdOut, stdErr)
+        finish()
         if exitCode ~= 0 or not stdOut or stdOut:gsub("%s+", "") == "" then
             cachedState = { available = false }
             return
@@ -80,6 +96,32 @@ local function refresh()
 
         local unsplashBg = getWeatherBackground(condition)
 
+        local windMph = current.windspeedMiles or ""
+        local windDir = current.winddir16Point or ""
+        local uvIndex = current.uvIndex or ""
+        local visibility = current.visibility or ""
+        local pressure = current.pressure or ""
+
+        local forecast = {}
+        if data.weather then
+            for i = 1, math.min(#data.weather, 3) do
+                local day = data.weather[i]
+                local dayCondition = ""
+                if day.hourly and #day.hourly > 4 then
+                    local h = day.hourly[4]
+                    if h.weatherDesc and h.weatherDesc[1] then
+                        dayCondition = h.weatherDesc[1].value or ""
+                    end
+                end
+                table.insert(forecast, {
+                    date = day.date or "",
+                    maxTemp = day.maxtempF or "",
+                    minTemp = day.mintempF or "",
+                    condition = dayCondition
+                })
+            end
+        end
+
         cachedState = {
             available = true,
             location = WEATHER_LOCATION,
@@ -89,13 +131,38 @@ local function refresh()
             rainChance = rainChance,
             condition = condition,
             icon = icon,
-            backgroundUrl = unsplashBg
+            backgroundUrl = unsplashBg,
+            windMph = windMph,
+            windDir = windDir,
+            uvIndex = uvIndex,
+            visibility = visibility,
+            pressure = pressure,
+            forecast = forecast
         }
-    end, { "-s", "-m", "15", "https://wttr.in/" .. WEATHER_LOCATION:gsub(", ", ",") .. "?format=j1" }):start()
+    end, { "-s", "-m", "15", "http://wttr.in/" .. WEATHER_LOCATION:gsub(", ", ",") .. "?format=j1" })
+
+    if not taskRef then
+        running = false
+        return
+    end
+    taskRef:start()
+
+    watchdog = hs.timer.doAfter(FETCH_TIMEOUT, function()
+        watchdog = nil
+        if taskRef then
+            pcall(function() taskRef:terminate() end)
+            taskRef = nil
+            running = false
+        end
+    end)
 end
 
 function weather.getStatus()
     return cachedState
+end
+
+function weather.refresh()
+    refresh()
 end
 
 function weather.start()

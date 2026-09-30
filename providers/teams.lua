@@ -20,6 +20,7 @@ end
 local TEAMS_BUNDLE_ID = "com.microsoft.teams2"
 
 local nodebin = require("nodebin")
+local taskguard = require("taskguard")
 
 local CACHE_FILE = "/tmp/teams_attention.json"
 local REFRESH_SCRIPT = hs.configdir .. "/scripts/teams_unread.js"
@@ -113,14 +114,14 @@ end
 -- chain exits. The node script takes ~3s, and that was 3s of Hammerspoon's
 -- main thread — which the HTTP server needs, since every request is
 -- dispatched synchronously onto the main queue. hs.task is genuinely async.
-local taskRef = nil -- keep the task alive so GC doesn't collect it mid-run
+-- Single-flight runner: holds the task reference and terminates a node script
+-- that hangs, so a wedged probe can't stop this provider refreshing for good.
+local runRefresh = taskguard.new(20)
 
 local function refreshCache()
-    if taskRef then return end -- refresh already in flight
     local node = nodebin.path()
     if not node then return end
-    taskRef = hs.task.new(node, function(exitCode, stdOut, stdErr)
-        taskRef = nil
+    runRefresh(node, { REFRESH_SCRIPT }, function(exitCode, stdOut, stdErr)
         if exitCode ~= 0 or not stdOut or stdOut == "" then return end
         -- Write to a temp file and rename so readers never see a partial write.
         local tmp = CACHE_FILE .. ".tmp"
@@ -129,8 +130,7 @@ local function refreshCache()
         f:write(stdOut)
         f:close()
         os.rename(tmp, CACHE_FILE)
-    end, { REFRESH_SCRIPT })
-    taskRef:start()
+    end)
 end
 
 function teams.getAttention()

@@ -6,6 +6,10 @@ local KEYCHAIN_SERVICE = env.get("SMB_KEYCHAIN_SERVICE", "SERVER._smb._tcp.local
 local KEYCHAIN_ACCOUNT = env.get("SMB_KEYCHAIN_ACCOUNT", "crocker")
 local MOUNT_CHECK_INTERVAL = 5
 local MOUNT_RETRY_COOLDOWN = 30
+-- Ceiling on a single mount round. mount_smbfs can hang on an unreachable or
+-- half-answering server, and without this the isMounting latch below would
+-- never clear and mounting would stop being retried for the session.
+local MOUNT_ROUND_TIMEOUT = 60
 
 local SHARES = {
     { name = "extra_space", remote = "//crocker@server.local/extra_space", mountPoint = os.getenv("HOME") .. "/mnt/server/extra_space" },
@@ -16,6 +20,7 @@ local SHARES = {
 local timer = nil
 local tasks = {}
 local isMounting = false
+local mountRoundWatchdog = nil
 local lastAttempt = 0
 local parentMount = os.getenv("HOME") .. "/mnt/server"
 local parentDev = nil
@@ -90,6 +95,14 @@ catch { wait }
     end
 end
 
+local function endMountRound()
+    isMounting = false
+    if mountRoundWatchdog then
+        mountRoundWatchdog:stop()
+        mountRoundWatchdog = nil
+    end
+end
+
 local function attemptMounts()
     if isMounting then return end
     local now = os.time()
@@ -100,7 +113,7 @@ local function attemptMounts()
     local pending = 0
     local function onOneDone()
         pending = pending - 1
-        if pending == 0 then isMounting = false end
+        if pending <= 0 then endMountRound() end
     end
 
     for _, share in ipairs(SHARES) do
@@ -109,7 +122,22 @@ local function attemptMounts()
             mountShare(share, onOneDone)
         end
     end
-    if pending == 0 then isMounting = false end
+    if pending == 0 then
+        endMountRound()
+        return
+    end
+
+    mountRoundWatchdog = hs.timer.doAfter(MOUNT_ROUND_TIMEOUT, function()
+        mountRoundWatchdog = nil
+        for name, task in pairs(tasks) do
+            if name ~= "__nc" and task then
+                pcall(function() task:terminate() end)
+                tasks[name] = nil
+            end
+        end
+        isMounting = false
+        print("smbmount: mount round timed out after " .. MOUNT_ROUND_TIMEOUT .. "s")
+    end)
 end
 
 local function check()
@@ -133,10 +161,16 @@ local function check()
 end
 
 function smbmount.start()
+    -- hs.fs.attributes *returns* nil for a missing path instead of raising, so
+    -- pcall succeeds and only `dev` tells us whether the read worked. Checking
+    -- `ok` made this warning unreachable, and a nil parentDev makes isMounted()
+    -- always false -- which had every share re-mounting every cooldown forever.
     local ok, dev = pcall(hs.fs.attributes, parentMount, "dev")
-    parentDev = dev
-    if not ok then
-        print("smbmount: could not read parent mount directory " .. parentMount)
+    parentDev = ok and dev or nil
+    if not parentDev then
+        print("smbmount: could not read parent mount directory " .. parentMount ..
+              " -- create it (mkdir -p) or mount detection cannot work")
+        return
     end
     if timer then timer:stop() end
     timer = hs.timer.doEvery(MOUNT_CHECK_INTERVAL, check)

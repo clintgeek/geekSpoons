@@ -157,21 +157,20 @@ Without this, the Messages provider will show "enable JS in Chrome" instead of u
 
 ### Microphone Control
 
-- **Mic Mute Toggle**: Tap the mic button. The button turns red and shows "MIC MUTED". A HUD overlay appears on your Mac screen confirming the state.
-- **Push to Talk**: Press and hold the "PUSH TO TALK" button. While held, your mic is unmuted. Release to re-mute. Works on touch (tap and hold) and mouse.
-- **How it works**: Uses input volume as a soft mute (0 = muted, restore previous volume on unmute). This works with audio interfaces that don't support hardware muting (e.g., Plugable Audio dock).
+- **Mic Mute Toggle**: Tap the mic button. Mutes system input devices and toggles the active meeting app's in-call mute (Google Meet, Teams, Zoom, Slack, Webex). The button turns red and shows "MIC MUTED". A HUD overlay appears on your Mac screen confirming the state.
+- **Push to Talk**: Press and hold the "PUSH TO TALK" button. While held, your mic is unmuted both at the system level and in the active meeting app (Google Meet, Teams). Release to re-mute. Works on touch (tap and hold) and mouse.
+- **How it works**: Uses CoreAudio hardware muting plus input volume as a soft mute backup. For Google Meet, interacts directly with the Meet call tab via Chrome JXA without needing focus.
 
 ### Camera Toggle
 
 - Tap the camera button to toggle your camera in the active meeting app.
-- Auto-detects which meeting app is running and sends the correct keyboard shortcut:
-  - **Zoom**: Cmd+Shift+V
+- Auto-detects which meeting app is running:
+  - **Google Meet (Chrome)**: Directly toggles camera in the active Meet tab via Chrome JXA without stealing window focus
   - **Teams**: Cmd+Shift+O
+  - **Zoom**: Cmd+Shift+V
   - **Slack Huddles**: Cmd+Shift+V
   - **Webex**: Cmd+Shift+V
-  - **Google Meet (Chrome)**: Cmd+E
-  - **Fallback**: Cmd+Shift+V to focused window
-- The button shows "CAM ACTIVE" (green) when your camera is in use, "CAM BLOCKED" (red) if blocked, or "CAMERA" (neutral) when idle. Camera status is polled every 5 seconds using the native `hs.camera` API.
+- The button shows "CAM ACTIVE" (green) when your camera is in use, or "CAMERA" (neutral) when idle. Camera status is polled every 2 seconds using the native `hs.camera` API.
 
 ### Audio Device Management
 
@@ -215,7 +214,8 @@ Smart launch behavior:
   - **Yellow** (1-2 hours): "in 1 hr 23 min"
   - **Yellow** (2-24 hours): "in 5 hours"
   - **Grey** (> 24 hours): "in 3 days"
-- If the meeting has a join URL (Teams, Zoom, Meet, Webex), a **JOIN** button appears. Tap it to open the meeting in your browser.
+- All-day events never appear on the tile — they would otherwise show as "NOW" for 24 hours and mask real meetings.
+- Tap the tile to open the schedule modal, which lists all of today's events (all-day entries shown as "All day", past entries dimmed) plus the next 5 upcoming events.
 - Calendar data is fetched from your ICS feed every 60 seconds using `node-ical` for full recurrence support (RRULE, EXDATE, RDATE, BYDAY, etc.)
 
 ### Weather
@@ -323,7 +323,8 @@ Returns the full system state as JSON. Polled by the web interface.
     "inUse": false,
     "blocked": false,
     "frontCamera": false,
-    "externalCamera": false
+    "externalCamera": false,
+    "teamsRunning": false
   },
   "nextUp": {
     "available": true,
@@ -602,9 +603,9 @@ Fetches the ICS feed URL, parses it with `node-ical` (full RRULE/EXDATE/RDATE su
 
 ### Camera status not updating
 
-1. Camera status polls every 5 seconds using `hs.camera`
+1. Camera status polls every 2 seconds using `hs.camera`
 2. Check that no other app is blocking camera access
-3. The button shows "CAM ACTIVE" when in use, "CAMERA" when idle
+3. The button shows "CAM ACTIVE" (green) when in use, "CAM OFF" (red) when Teams is running but camera is off, "CAMERA" (grey) when idle
 
 ### Tablet can't connect
 

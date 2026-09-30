@@ -78,8 +78,12 @@ end
 -- The AX query is slow (200+ element BFS), so it runs asynchronously in
 -- an osascript subprocess and updates this cache; getAttention() kicks
 -- off a refresh (if one isn't in flight) and returns the cached result.
+local taskguard = require("taskguard")
+
 local cachedResult = { severity = "none", count = 0, label = "" }
-local taskRef = nil -- keep hs.task alive so GC doesn't collect it mid-run
+-- Single-flight runner: holds the task reference and terminates an AX query
+-- that hangs, so a wedged osascript can't stop this provider refreshing.
+local runQuery = taskguard.new(20)
 
 local function buildResult(queryOutput)
     -- AX available (old Outlook): parse the Inbox unread count
@@ -101,17 +105,13 @@ function outlook.getAttention()
         return cachedResult
     end
 
-    if not taskRef then
-        taskRef = hs.task.new("/usr/bin/osascript", function(exitCode, stdOut, stdErr)
-            taskRef = nil
-            if exitCode == 0 then
-                cachedResult = buildResult(stdOut and stdOut:gsub("%s+$", "") or "")
-            end
-            -- Non-zero exit (e.g. Outlook quit mid-query): keep the last
-            -- cached result; the "not running" case above handles quits.
-        end, { "-e", INBOX_AX_QUERY })
-        taskRef:start()
-    end
+    runQuery("/usr/bin/osascript", { "-e", INBOX_AX_QUERY }, function(exitCode, stdOut, stdErr)
+        if exitCode == 0 then
+            cachedResult = buildResult(stdOut and stdOut:gsub("%s+$", "") or "")
+        end
+        -- Non-zero exit (e.g. Outlook quit mid-query): keep the last
+        -- cached result; the "not running" case above handles quits.
+    end)
 
     return cachedResult
 end

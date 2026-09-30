@@ -79,10 +79,38 @@ end
 
 local function getHTML()
     local f = io.open(hs.configdir .. "/index.html", "rb")
-    if not f then return "HTML not found" end
+    if not f then
+        return "dashboard not found", 500, corsHeaders("text/plain; charset=utf-8")
+    end
     local c = f:read("*all")
     f:close()
-    return c
+    return c, 200, corsHeaders("text/html; charset=utf-8")
+end
+
+-- Static assets split out of index.html. An exact-match whitelist rather than
+-- a path join, so no request can walk out of the config directory.
+--
+-- These are served no-store like everything else here. Caching them would be
+-- the usual reason to split a page up, but this config already fought a stale
+-- asset problem (hence the disabled service worker), and on a LAN the transfer
+-- is free. The win being taken here is a navigable file, not a cached one.
+local STATIC_FILES = {
+    ["/app.css"] = "text/css; charset=utf-8",
+    ["/app.js"]  = "application/javascript; charset=utf-8",
+}
+
+local function serveStatic(path)
+    local f = io.open(hs.configdir .. path, "rb")
+    if not f then
+        return "not found: " .. path, 404, corsHeaders("text/plain; charset=utf-8")
+    end
+    local c = f:read("*all")
+    f:close()
+    return c, 200, corsHeaders(STATIC_FILES[path])
+end
+
+local function notFound(path)
+    return "not found: " .. path, 404, corsHeaders("text/plain; charset=utf-8")
 end
 
 local function handleRequest(method, path, headers, body)
@@ -116,9 +144,20 @@ local function handleRequest(method, path, headers, body)
             cached = attention.getStatus(),
             windows = {},
         }
-        -- Get window titles via hs.window (faster than AXUIElement)
-        for _, appName in ipairs({"Microsoft Outlook", "MSTeams", "Slack", "Messages"}) do
-            local app = hs.application.find(appName)
+        -- Resolve by bundle ID. hs.application.find() searches by name with
+        -- exact=false, and on a miss it falls through to hs.window.find(),
+        -- which runs allWindows() against every running app -- the same
+        -- synchronous AX sweep the rest of this config goes out of its way to
+        -- avoid. A miss is the normal case here, since these apps are often
+        -- closed.
+        local DEBUG_APPS = {
+            ["Microsoft Outlook"] = "com.microsoft.Outlook",
+            ["Microsoft Teams"]   = "com.microsoft.teams2",
+            ["Slack"]             = "com.tinyspeck.slackmacgap",
+            ["Google Chrome"]     = "com.google.Chrome",
+        }
+        for appName, bundleID in pairs(DEBUG_APPS) do
+            local app = hs.application.applicationsForBundleID(bundleID)[1]
             if app then
                 local wins = app:allWindows()
                 local titles = {}
@@ -175,9 +214,9 @@ local function handleRequest(method, path, headers, body)
 
         -- Actions that return a result (synchronous, need pcall)
         local actionResults = {
-            mute_toggle    = function() return {micMuted = mute.toggleMute()} end,
-            talk_start     = function() return {micMuted = mute.startTalk()} end,
-            talk_stop      = function() return {micMuted = mute.stopTalk()} end,
+            mute_toggle    = function() local m = mute.toggleMute(); meeting.toggleMute(); return {micMuted = m} end,
+            talk_start     = function() local m = mute.startTalk(); meeting.startTalk(); return {micMuted = m} end,
+            talk_stop      = function() local m = mute.stopTalk(); meeting.stopTalk(); return {micMuted = m} end,
             audio_mute     = function() return {audioMuted = audio.toggleMute()} end,
             cam_toggle     = function()
                 meeting.toggleCamera()
@@ -208,6 +247,7 @@ local function handleRequest(method, path, headers, body)
             app_teams          = function() apps.smartLaunch("teams") end,
             app_slack          = function() apps.smartLaunch("slack") end,
             app_outlook        = function() apps.smartLaunch("outlook") end,
+            app_outlookweb     = function() apps.smartLaunch("outlookweb") end,
             app_firefox        = function() apps.smartLaunch("firefox") end,
             spotify_playpause  = function() spotify.playPause() end,
             spotify_next       = function() spotify.nextTrack() end,
@@ -215,7 +255,8 @@ local function handleRequest(method, path, headers, body)
             spotify_shuffle    = function() spotify.toggleShuffle() end,
             spotify_repeat     = function() spotify.toggleRepeat() end,
             spotify_like       = function() spotify.likeCurrentTrack() end,
-            window_next_screen = function() winManager.moveToNextScreen() end,
+            app_managers_toolbox = function() apps.smartLaunch("managersToolbox") end,
+            weather_refresh     = function() weather.refresh() end,
             window_split       = function() winManager.split5050() end,
             spotify_open       = function() hs.application.launchOrFocus("Spotify") end,
         }
@@ -240,7 +281,18 @@ local function handleRequest(method, path, headers, body)
         return jsonResponse({status = "error", error = "unknown action: " .. action})
     end
 
-    return getHTML(), 200, corsHeaders("text/html; charset=utf-8")
+    -- Serve the dashboard only for the document paths. Everything else used to
+    -- fall through to a 200 with the full 98KB page, which masked typo'd API
+    -- routes and made a missing asset look like a successful load.
+    if path == "/" or path == "" or path == "/index.html" then
+        return getHTML()
+    end
+
+    if STATIC_FILES[path] then
+        return serveStatic(path)
+    end
+
+    return notFound(path)
 end
 
 function server.start()

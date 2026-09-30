@@ -105,40 +105,15 @@ function audio.cycleOutput()
     return "Speaker"
 end
 
--- Dedicated Input Mic Device Switcher
-function audio.cycleInput()
-    local inputs = hs.audiodevice.allInputDevices()
-    if #inputs <= 1 then
-        return inputs[1] and inputs[1]:name() or "Built-in Mic"
-    end
-
-    local current = audio.getDefaultInput()
-    local nextIndex = 1
-
-    for i, dev in ipairs(inputs) do
-        if current and dev:uid() == current:uid() then
-            nextIndex = (i % #inputs) + 1
-            break
-        end
-    end
-
-    local nextDev = inputs[nextIndex]
-    if nextDev then
-        nextDev:setDefaultInputDevice()
-        hs.alert.show("🎙️ Input Mic: " .. nextDev:name())
-        return nextDev:name()
-    end
-    return "Microphone"
-end
-
+-- Only the fields the dashboard actually renders. This runs on every
+-- /api/status poll (once a second), so the input-device lookup that fed the
+-- unused inputName/inputVolume fields was a per-second CoreAudio query for
+-- data nothing displayed.
 function audio.getStatus()
     local outDev = audio.getDefaultOutput()
-    local inDev = audio.getDefaultInput()
     return {
         name = outDev and outDev:name() or "Speaker",
-        inputName = inDev and inDev:name() or "Microphone",
         volume = audio.getVolume(),
-        inputVolume = inDev and math.floor(inDev:volume() or 0) or 0,
         isMuted = audio.isMuted()
     }
 end

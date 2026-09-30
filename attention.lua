@@ -15,12 +15,14 @@ local refreshTimers = {}
 --   slack/teams: 15s — node scripts run detached (non-blocking), safe to run often
 --   outlook:     10s — AX AppleScript is ~200ms, cheap enough for main thread
 --   messages:    15s — JXA Chrome probe is ~500ms, slightly heavier
+--   outlookweb:  15s — same JXA Chrome probe as messages
 local DEFAULT_INTERVAL = 15
 local PROVIDER_INTERVALS = {
     slack = 15,
     teams = 15,
     outlook = 10,
     messages = 15,
+    outlookweb = 15,
 }
 
 -- Refresh a single provider and update its cached state.
@@ -61,13 +63,6 @@ local function refreshProvider(appId)
     end
 end
 
--- Refresh all providers (used by refreshNow after app launch).
-local function refreshAll()
-    for appId, _ in pairs(providers) do
-        refreshProvider(appId)
-    end
-end
-
 function attention.register(appId, providerFn)
     providers[appId] = providerFn
 end
@@ -85,17 +80,6 @@ end
 function attention.markLoading(appId)
     cachedState[appId] = { severity = "loading", count = 0, label = "Loading..." }
     loadingSince[appId] = os.time()
-end
-
--- Trigger an immediate refresh of all providers, clearing all loading state.
--- Used after app launch sequences complete.
-function attention.refreshNow()
-    for appId, state in pairs(cachedState) do
-        if state.severity == "loading" then
-            cachedState[appId] = nil
-        end
-    end
-    refreshAll()
 end
 
 -- Refresh a single provider immediately, clearing any loading state first.

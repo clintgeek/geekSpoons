@@ -5,11 +5,24 @@ local nodebin = require("nodebin")
 local ICS_URL = env.get("CALENDAR_ICS_URL") or ""
 local SCRIPT_PATH = os.getenv("HOME") .. "/.hammerspoon/scripts/calendar_ics.js"
 local REFRESH_INTERVAL = 60 -- 1 minute in seconds
+-- Watchdog for a node process that never exits. Without it the `running`
+-- latch below stays set and the calendar stops refreshing for the session.
+local FETCH_TIMEOUT = 45
 
 local cachedState = { available = false, title = "Loading calendar..." }
 local refreshTimer = nil
 local running = false
 local taskRef = nil -- keep hs.task alive so GC doesn't collect it before completion
+local watchdog = nil
+
+local function finish()
+    running = false
+    taskRef = nil
+    if watchdog then
+        watchdog:stop()
+        watchdog = nil
+    end
+end
 
 local function refresh()
     if running then return end
@@ -24,8 +37,7 @@ local function refresh()
     end
 
     taskRef = hs.task.new(node, function(exitCode, stdOut, stdErr)
-        taskRef = nil -- clear ref after completion so it can be GC'd
-        running = false
+        finish()
         if exitCode == 0 and stdOut and stdOut:gsub("%s+$", "") ~= "" then
             local ok, data = pcall(hs.json.decode, stdOut)
             if ok and data and type(data) == "table" then
@@ -38,7 +50,20 @@ local function refresh()
             cachedState = { available = false, title = "Calendar unavailable" }
         end
     end, { SCRIPT_PATH, ICS_URL })
+    if not taskRef then
+        running = false
+        return
+    end
     taskRef:start()
+
+    watchdog = hs.timer.doAfter(FETCH_TIMEOUT, function()
+        watchdog = nil
+        if taskRef then
+            pcall(function() taskRef:terminate() end)
+            taskRef = nil
+            running = false
+        end
+    end)
 end
 
 function calendar.getStatus()

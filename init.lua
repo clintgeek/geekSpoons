@@ -48,6 +48,7 @@ local outlookProvider = require("providers.outlook")
 local slackProvider = require("providers.slack")
 local teamsProvider = require("providers.teams")
 local messagesProvider = require("providers.messages")
+local outlookWebProvider = require("providers.outlook-web")
 local server = require("server")
 local smbmount = require("smbmount")
 
@@ -56,6 +57,7 @@ attention.register("outlook", outlookProvider.getAttention)
 attention.register("slack", slackProvider.getAttention)
 attention.register("teams", teamsProvider.getAttention)
 attention.register("messages", messagesProvider.getAttention)
+attention.register("outlookweb", outlookWebProvider.getAttention)
 
 -- Start per-provider attention refresh timers.
 -- Each provider refreshes on its own interval (10-15s) with staggered
@@ -86,26 +88,36 @@ hs.execute('launchctl setenv WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS "--remote-deb
 -- kill/relaunch flicker.
 local slackRelaunching = false
 
+local portCheckTask = nil
+
 local function ensureSlackDebugPort()
-    local app = hs.application.get("Slack")
+    local app = hs.application.applicationsForBundleID("com.tinyspeck.slackmacgap")[1]
     if not app then return end
+    if portCheckTask then return end
 
-    -- Check if Slack's debug port is already listening.
-    -- Synchronous but fast (lsof on a single port is ~10ms).
-    local portCheck = hs.execute("lsof -i :9222 2>/dev/null")
-    if portCheck and portCheck:match("LISTEN") then
-        return
-    end
+    -- Check whether Slack's debug port is already listening. lsof runs as a
+    -- task, not hs.execute: it is usually ~10ms, but it stats every open file
+    -- descriptor on the system and blocks for seconds when a network mount is
+    -- unresponsive -- and this machine keeps three SMB shares mounted. On the
+    -- main thread that stall lands directly on the dashboard's HTTP server.
+    portCheckTask = hs.task.new("/usr/sbin/lsof", function(exitCode, stdOut)
+        portCheckTask = nil
+        if stdOut and stdOut:match("LISTEN") then return end
 
-    -- Port not open — hide, kill, and relaunch Slack with debug port
-    app:hide()
-    hs.alert.show("Slack Loading...", 2)
-    slackRelaunching = true
-    app:kill()
-    hs.timer.doAfter(2, function()
-        hs.execute('open -a Slack --args --remote-debugging-port=9222')
-        hs.timer.doAfter(5, function() slackRelaunching = false end)
-    end)
+        -- Port not open — hide, kill, and relaunch Slack with debug port
+        app:hide()
+        hs.alert.show("Slack Loading...", 2)
+        slackRelaunching = true
+        app:kill()
+        hs.timer.doAfter(2, function()
+            _G._retained.slackRelaunch = hs.task.new("/usr/bin/open",
+                nil, { "-a", "Slack", "--args", "--remote-debugging-port=9222" })
+            if _G._retained.slackRelaunch then _G._retained.slackRelaunch:start() end
+            hs.timer.doAfter(5, function() slackRelaunching = false end)
+        end)
+    end, { "-i", ":9222" })
+    if not portCheckTask then return end
+    portCheckTask:start()
 end
 
 -- Timer intervals (seconds) for app-launch settling sequence.
@@ -118,6 +130,7 @@ local TEAMS_FIRST_REFRESH    = 5    -- first provider refresh after Teams settle
 local TEAMS_SECOND_REFRESH   = 10   -- second refresh for Teams
 local OUTLOOK_SETTLE_DELAY   = 8    -- wait for Outlook AX tree to be ready
 local MESSAGES_SETTLE_DELAY  = 5    -- wait for Chrome tab to load before JXA probe
+local OUTLOOK_WEB_SETTLE_DELAY = 5  -- wait for Outlook Web tab to load before JXA probe
 
 -- When a watched app launches, mark it loading, then refresh after it settles.
 -- When it terminates, mark it not running immediately.
@@ -139,7 +152,9 @@ _G._retained.appWatcher = hs.application.watcher.new(function(appName, event)
             hs.timer.doAfter(OUTLOOK_SETTLE_DELAY, function() attention.refreshProvider("outlook") end)
         elseif appName == "Google Chrome" then
             attention.markLoading("messages")
+            attention.markLoading("outlookweb")
             hs.timer.doAfter(MESSAGES_SETTLE_DELAY, function() attention.refreshProvider("messages") end)
+            hs.timer.doAfter(OUTLOOK_WEB_SETTLE_DELAY, function() attention.refreshProvider("outlookweb") end)
         end
     elseif event == hs.application.watcher.terminated then
         if appName == "Slack" and not slackRelaunching then
@@ -150,6 +165,7 @@ _G._retained.appWatcher = hs.application.watcher.new(function(appName, event)
             attention.markNotRunning("outlook")
         elseif appName == "Google Chrome" then
             attention.markNotRunning("messages")
+            attention.markNotRunning("outlookweb")
         end
     end
 end)
@@ -167,6 +183,7 @@ end)
 -- Hyper + M: Mic Mute Toggle
 hs.hotkey.bind(hyper, "M", function()
     mute.toggleMute()
+    meeting.toggleMute()
 end)
 
 -- Hyper + Space: Spotify Play/Pause Toggle
